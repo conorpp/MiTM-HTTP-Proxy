@@ -1,3 +1,6 @@
+#ifndef UTILS_H
+#define UTILS_H
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -14,8 +17,6 @@
 #include <netinet/ether.h>
 
 #include <arpa/inet.h>
-
-#include <pcap.h>
 
 /*Error Checking
  * */
@@ -189,6 +190,7 @@ void parseHTTPRequest(const char* str, struct HTTPRequest* req){
     req->protocol = (char *) malloc( (size = strlen(HTTP_BUF)+1) );
     memmove(req->protocol, HTTP_BUF, size);
     parseURL(req->url, &req->host, &req->path, &req->port, &req->ssl);
+    if (strncasecmp(req->method, "CONNECT", 7) == 0) req->ssl = 1;
 }
 
 void parseURL(const char* url, char** _host, char** _path, int* port, int* ssl){
@@ -254,4 +256,4 @@ void freeHTTPRequest(struct HTTPRequest* req){
 
 
 
-
+#endif
