@@ -1,5 +1,7 @@
 
 
-
 ref
 a.out
+proxy
+*.o
+*.swp
