@@ -148,7 +148,7 @@ int proxyHTTP(struct HTTPRequest* req, FILE* c_rfd, FILE* c_wfd, FILE* s_rfd, FI
 
 void proxyhttps(int clientfd, int serverfd){
     SSL_Connection* ssl_c;
-    SSL_Connection* ssl_s = SSL_Connect(serverfd, SSL_CLIENT);
+    SSL_Connection* ssl_s = SSL_Connect(serverfd);
     
     int timeToSend = 0, connected = 0, r=0;
     char buf[1024];
@@ -172,7 +172,7 @@ void proxyhttps(int clientfd, int serverfd){
 
     printf("SSL connecting . . .\n");
 
-    ssl_c = SSL_Connect(clientfd, SSL_SERVER);
+    ssl_c = SSL_Accept(clientfd);
 
     printf("SSL handshake finished. Reading content.\n");
     printf("%% SSL REQUEST %%\n");

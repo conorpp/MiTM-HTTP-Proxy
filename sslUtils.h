@@ -42,37 +42,51 @@ void SSL_Init(char *certFile, char* privKeyFile){
 
 /*
     Takes a already connected TCP file descriptor
-    and wraps it in SSL. 
+    and wraps it in SSL.  For starting SSL
+    handshake with server.
     @param sockfd the file descriptor
 */
-#define SSL_CLIENT (1 << 0)
-#define IS_SSL_CLIENT(x) ((x) & SSL_CLIENT)
-#define SSL_SERVER (1 << 1)
-#define IS_SSL_SERVER(x) ((x) & SSL_SERVER)
-SSL_Connection* SSL_Connect(int sockfd, int flags){
+SSL_Connection* SSL_Connect(int sockfd){
     SSL_Connection* sslcon = malloc(sizeof(SSL_Connection));
     if (sslcon == (SSL_Connection*) 0)
         die("SSL_Connection: malloc returned NULL");
-    if (IS_SSL_SERVER(flags)){
-        sslcon->handle = SSL_SERVER_HANDLE;
-    }else{
-        sslcon->handle = SSL_CTX_new(SSLv23_client_method());
-        if (sslcon->handle == (SSL_CTX*) 0)
-            ERR_print_errors_fp (stderr);
-    }
+    
+    sslcon->handle = SSL_CTX_new(SSLv23_client_method());
+    if (sslcon->handle == (SSL_CTX*) 0)
+        ERR_print_errors_fp (stderr);
+    
     sslcon->socket = SSL_new(sslcon->handle);
     if (sslcon->socket == (SSL*) 0)
         ERR_print_errors_fp (stderr);
     
     if ( SSL_set_fd(sslcon->socket, sockfd) != 1 )
         ERR_print_errors_fp (stderr);
-    if (IS_SSL_SERVER(flags)){
-        if (SSL_accept(sslcon->socket) != 1)
-            ERR_print_errors_fp (stderr);
-    }else{
-        if (SSL_connect(sslcon->socket) != 1)
-            ERR_print_errors_fp (stderr);
-    }
+    
+    if (SSL_connect(sslcon->socket) != 1)
+        ERR_print_errors_fp (stderr);
+    
+    return sslcon;
+}
+
+/*
+    Takes a connected file descriptor 
+    and wraps it in SSL.  For listening
+    for a SSL handshake from a client.
+*/
+SSL_Connection* SSL_Accept(int sockfd){
+    SSL_Connection* sslcon = malloc(sizeof(SSL_Connection));
+    
+    sslcon->handle = SSL_SERVER_HANDLE;
+    sslcon->socket = SSL_new(sslcon->handle);
+    
+    if (sslcon->socket == (SSL*) 0)
+        ERR_print_errors_fp (stderr);
+    
+    if ( SSL_set_fd(sslcon->socket, sockfd) != 1 )
+        ERR_print_errors_fp (stderr);
+    
+    if (SSL_accept(sslcon->socket) != 1)
+        ERR_print_errors_fp (stderr);
     return sslcon;
 }
 
@@ -83,7 +97,9 @@ void SSL_Close(SSL_Connection* sslcon){
     if (sslcon != (SSL_Connection*) 0){
         SSL_shutdown(sslcon->socket);
         SSL_free(sslcon->socket);
-        SSL_CTX_free(sslcon->handle);
+        // The Server handle is reusable.
+        if (sslcon->handle != SSL_SERVER_HANDLE)
+            SSL_CTX_free(sslcon->handle);
         free(sslcon);
     }
 }
