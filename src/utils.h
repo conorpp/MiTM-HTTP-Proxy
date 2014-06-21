@@ -5,6 +5,7 @@
 #include <stdlib.h>     // exit
 #include <errno.h>      // errno, perror
 #include <sys/wait.h>   // waitpid, WHOHANG
+#include <signal.h>     // signal
 
 /*Error Checking, signal catching
  ****************************************************/

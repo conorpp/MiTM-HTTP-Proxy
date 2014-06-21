@@ -7,8 +7,17 @@
 /* HTTP/URL parsing
  * */
 
+
+typedef struct _HTTPHeader{
+    int type;           // HTTP header type
+    char* header;
+    char* data;         // HTTP header data
+    int length;
+    struct _HTTPHeader* next;   // pointer to next HTTP header
+} HTTPHeader;
+
 // Important information from a HTTP request.
-struct HTTPRequest{
+typedef struct{
     char* method,       // HTTP method e.g. "GET", "CONNECT"
         * url,          // "<http[s]>://<hostname>[:port]/[path]"
         * protocol,      // HTTP proto e.g. "HTTP/1.1"
@@ -16,7 +25,32 @@ struct HTTPRequest{
         * path;         // Target path
     int port,           // Target port
         ssl;            // HTTP/HTTPS
-};
+    HTTPHeader* header;
+} HTTPRequest;
+
+// Important information from a HTTP response.
+typedef struct{
+    char* protocol,       // HTTP method e.g. "GET", "CONNECT"
+        * comment;          // "<http[s]>://<hostname>[:port]/[path]"
+    int status;           // Target port
+    HTTPHeader* header;
+} HTTPResponse;
+
+
+#define HTTP_CL 0
+#define HTTP_HOST 1
+#define HTTP_A_ENCODING 2
+#define HTTP_UNKNOWN 3
+void getHTTPHeaderType(HTTPHeader* head, char *str);
+
+// add to linked list
+void addHTTPHeader(HTTPHeader** first, char* type, char* data);
+
+// get item from linked list
+HTTPHeader* getHTTPHeader(HTTPHeader* first, int type);
+
+// Free linked list
+void freeHTTPHeaders(HTTPHeader** first);
 
 // Buffer to reuse for reading/writing
 #define HTTP_BUF_SIZE 10000
@@ -40,12 +74,16 @@ void freeURL(char* host, char* path);
 // a HTTPRequest struct.
 ///@param str: the HTTP request string.
 ///@param req: pointer to HTTPRequest struct to allocate.
-void parseHTTPRequest(const char* str, struct HTTPRequest* req);
+int parseHTTPMethod(HTTPRequest* req, const char* str);
+
+int parseHTTPStatus(HTTPResponse* req, const char* str);
 
 
 // frees an HTTPRequest struct.
 ///@param req: pointer to struct to free.
-void freeHTTPRequest(struct HTTPRequest* req);
+void freeHTTPRequest(HTTPRequest* req);
+
+void freeHTTPResponse(HTTPResponse* res);
 
 
 #endif

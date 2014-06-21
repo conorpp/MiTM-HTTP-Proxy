@@ -6,6 +6,7 @@
 #include "tcp.h"
 #include "http.h"
 #include "ssl.h"
+#include "reader.h"
 
 struct SSLConnection {
     int socket;
@@ -14,7 +15,7 @@ struct SSLConnection {
 };
 
 
-int proxyHTTP(int clientfd);
+int proxyHTTP(HTTPRequest* req, int clientfd, int serverfd);
 int proxyHTTPS(HTTPRequest* req, struct SSLConnection* ssl,int clientfd, int serverfd);
 
 
@@ -30,17 +31,17 @@ int main(int argc, char *argv[]){
     char line[10000];
     memset(line,0,10000);
     
-    // Prepare for any ssl connections
+    signal(SIGCHLD, sigchld_handler);
     SSL_Init(argv[2], argv[3]);
-    printf("Proxy listening on %s\n", argv[1]);
-    
     sockfd = Listen(NULL, argv[1]);
+    
+    printf("Proxy listening on %s\n", argv[1]);
     
     while(1){
         
         slen = sizeof their_addr;
         newfd = accept(sockfd, (struct sockaddr *)&their_addr, &slen);
-        printf("--New Connection--\n");
+        printf("got new connection\n");
         
         if (newfd == -1){
             perror("accept"); //continue;
@@ -49,14 +50,37 @@ int main(int argc, char *argv[]){
         if (fork() == 0){       // child process 
             close(sockfd);
             
+            int r, o=0;
+            while (  (r = read(newfd, &line[o], 1)) > 0){
+                if (o>9999)
+                    die("buffer space exceeded.");
+                if (line[o] == '\n'){
+                    line[o+1] = '\0';
+                    break;
+               }
+                ++o;
+            }
+            if (!o)die("could not get input from client");
+            printf("gotline: %s", line);
+            HTTPRequest req; 
+            parseHTTPRequest(line, &req);
+            printf("connecting to %s %d", req.host, req.port);
+            int serverfd = Connect(req.host, req.port);
             
-            if (0){
+            if (req.ssl){
+                printf("PROXYING HTTPS (%d)\n", req.port);
+                proxyhttps(newfd, serverfd);
+                //proxyHTTPS(&req, &ssls, newfd, serverfd);
             }else{
-                printf("PROXYING HTTP \n" );
-                proxyHTTP(newfd);
+                //FILE* s_wfd = fdopen(serverfd, "w");
+                //FILE* c_wfd = fdopen(newfd, "w");
+                //FILE* c_rfd = fdopen(newfd, "r");
+                //FILE* s_rfd = fdopen(serverfd, "r");
+                printf("PROXYING HTTP (%d)\n", req.port);
+                proxyHTTP(&req, newfd, serverfd);
             }
             close(newfd);
-            //close(serverfd);
+            close(serverfd);
             exit(0);
         }else{//   parent
             close(newfd);
@@ -67,169 +91,79 @@ int main(int argc, char *argv[]){
     return 0;
 }
 
-typedef struct{
-    char* buf;
-    int length;
-    int offset;
-    int headerStart;
-    int contentStart;
-    int state;
-    int content;
-}storePtr;
 
-enum HttpState{E_readMethod=0, E_readStatus, E_connect, E_readHeader, E_readContent, E_finished};
-#define STORE_SIZE 1000000
-storePtr* store(char* data, int length){
-    static char buffer[STORE_SIZE];
-    static storePtr S;
-    if (data != (char*)0){
-        if (S.length + length > STORE_SIZE)
-            die("store:  memory exceeded.");
-        memmove(&buffer[S.length], data, length);
-        S.length += length;
-    }else{
-        S.buf = buffer;
-        S.length = 0;
-        S.offset = 0;
-        S.state = E_readMethod;
-        S.content = 0;
-        S.headerStart = 0;
-        S.contentStart = 0;
-    }
-    return &S;
-}
-
-int parseHTTP(void* http, storePtr* str, HTTPHeader** header){
-    static char headertype[1000], data[1000];
-    int ec;
-    char* httpbuf = str->buf;
-    if (str->state == E_connect)
-        str->state = E_readHeader;
-    switch(str->state){
-        case E_readMethod:
-            str->offset = parseHTTPMethod((HTTPRequest*)http, httpbuf);
-            str->headerStart = str->offset;
-            return (str->state = E_connect);
-        break;
-        case E_readStatus:
-            str->offset = parseHTTPStatus((HTTPResponse*)http, httpbuf);
-            HTTPResponse* res = (HTTPResponse*)http;
-            printf("status: %s %d %s\n", res->protocol, res->status, res->comment);
-            return (str->state = E_readHeader);
-        break;
-        case E_readHeader:
-            
-          while(1){
-            httpbuf = &str->buf[str->offset];
-            ec = sscanf(httpbuf, "%1000[^:] %*[: ] %1000[^\r\n]",
-                    headertype,       data);
-            if (ec == 2){
-                addHTTPHeader(header, headertype, data);
-                str->offset += strlen(headertype) + strlen(data)+4;
-                
-            }else{
-                if (
-                        strncasecmp(httpbuf, "\n\n", 2) == 0 ||
-                        strncasecmp(httpbuf, "\r\n\r\n", 4)
-                   ){
-                    str->contentStart = str->offset;
-                    HTTPHeader* h = getHTTPHeader(*header, HTTP_CL);
-                    
-                    if (h == (HTTPHeader*) 0)
-                        str->state = E_finished;
-                    else{
-                        str->content = atol(h->data);
-                        str->state = str->content ? E_readContent : E_finished;
-                    }
-                }
-                break;
-            }
-          }
-        break;
-        case E_readContent:
-            if (str->length - str->offset >= str->content){
-                str->state = E_finished;
-            }
-        break;
-    }
-    return str->state;
-}
-void printHTTPHeaders(HTTPHeader **header){
-    HTTPHeader** tmp = header;
-    printf("\n");
-    while(*tmp != (HTTPHeader*)0){
-        printf("%s: %s\n", (*tmp)->header, (*tmp)->data);
-        tmp = &((*tmp)->next);
-    }
-    printf("\n");
-}
-int proxyHTTP(int clientfd){
-    int r, s;
-    HTTPRequest req;
-    HTTPResponse res;
-    memset(&req,  0, sizeof(HTTPRequest));
-    memset(&res,  0, sizeof(HTTPResponse));
-    int serverfd;
+int proxyHTTP(HTTPRequest* req, int clientfd, int serverfd){
+    int cl = -1, r;
     char line[10000];
-    storePtr* http_store;
-    
-    http_store = store(NULL, 0);
-    
-    while ((r = read(clientfd, line, 9999)) > 0){
-        (void) store(line, r);
-        
-        if (parseHTTP(&req, http_store, &req.header) == E_connect){
-            serverfd = Connect(req.host, req.port);
-        }
-        if (parseHTTP(&req, http_store, &req.header) == E_finished)
-            break;        
+    Reader* c_reader = openReader(read, clientfd, 9999, '\n', 8);
+    Reader* s_reader = openReader(read, serverfd, 9999, '\n', 8);
+    printf("%% REQUEST %%\n"); 
 
-    }
-    printf("\n-%%- Request -%%-\n") ;
-    sprintf(line, "%s %s %s\r\n", req.method, req.path, req.protocol);
-    //write(fileno(stdout), line, strlen(line));
+    fprintf(stdout,"%s %s %s\r\n", req->method,req->path,req->protocol);
+    sprintf(line,"%s %s %s\r\n", req->method,req->path,req->protocol);
     write(serverfd, line, strlen(line));
-    HTTPHeader* H;
-    for(H=req.header; H != (HTTPHeader*)0; H=H->next){
-        //if (H->type == HTTP_A_ENCODING)
-        //    sprintf(line, "%s: text/*\r\n", H->header);
-        //else
-        sprintf(line, "%s: %s\r\n", H->header, H->data);
-        write(fileno(stdout), line, strlen(line));
-        write(serverfd, line, strlen(line));
-    }
-    
-    //write(fileno(stdout), http_store->buf, http_store->length);
-    write(serverfd, &http_store->buf[http_store->contentStart], http_store->length);
-    printf("\n-%%- RESPONSE -%%-\n");
-    http_store = store(NULL, 0);
-    http_store->state = E_readStatus;
-    while( (r = read(serverfd, line, 9999)) > 0 ){
-        (void) store(line, r);
-
-        s = parseHTTP(&res, http_store, &res.header);
-        
-        if (s == E_readHeader)
-            s = parseHTTP(&res, http_store, &res.header);
-
-        if (s == E_finished)
+    while ( (r=readBuffer(c_reader, line)) > 0){
+        (void) write(serverfd, line, r);
+        for(int i=0; i<r; i++)
+            putchar(line[i]);
+        if (strcmp(line, "\n") == 0 || strcmp(line, "\r\n") == 0)
             break;
+        if (strncasecmp(line, "Content-Length:", 15) == 0)
+            cl = atol(&line[15]);
     }
-    //write(fileno(stdout), http_store->buf, http_store->length);
-    write(clientfd, http_store->buf, http_store->length);
-    
-    freeHTTPRequest(&req);
 
+    if (cl > 0)
+        while( (cl -= ( r=readBuffer(c_reader, line) )) > 0 ){
+           // if (byte == EOF)
+           //     continue;
+            printf("%s", line);
+            write(serverfd, line, r);
+        }
+    cl = -1;
+    fflush(stdout);
+    //fflush(s_wfd);
+
+    printf("%% RESPONSE %s %%\n", req->host);
+    while(((r=readBuffer(s_reader, line)) > 0)){
+        (void) write(clientfd, line, r);
+        printf("    %s",line);
+        if (strcmp(line, "\n") == 0 || strcmp(line, "\r\n") == 0)
+            break;
+        if (strncasecmp(line, "Content-Length:", 15) == 0)
+            cl = atol(&line[15]);
+    }
+    int total = 0, clcopy = cl;
+    s_reader->delim = READER_NO_DELIM;
+    s_reader->chunkSize = 1;
+    if (cl > 0)
+    while( ( (r=readBuffer(s_reader, line) )) >0 ){
+        //if ((byte = getc(s_rfd)) == EOF)
+        //    continue;
+        //                putchar(byte);
+        printf("%d\n",cl );
+        write(clientfd, line,r);
+        total += r;
+    }
+    total+=r;
+    printf("\n                total content length::%d/%d\n", total, clcopy);
+    
+    fflush(stdout);
+    
+    freeHTTPRequest(req);
+    closeReader(c_reader);
+    closeReader(s_reader);
     return 0;
 }
 
 void proxyhttps(int clientfd, int serverfd){
-    SSL_Connection* ssl_c = (SSL_Connection*) 0;
+    SSL_Connection* ssl_c;
     SSL_Connection* ssl_s = SSL_Connect(serverfd);
     
-    int r=0,total=0;
+    int r=0;
     char buf[1024];
     
+    printf("got new connection.  \n");
+
     int offset = 1;
     printf("%% CLEAR PROXY REQUEST %%\n");
     if( (r = read(clientfd, buf, 1000)) > 0){
@@ -238,11 +172,9 @@ void proxyhttps(int clientfd, int serverfd){
             exit(4);
         }
         buf[r] = '\0';
-        total = (offset += r);
-        
+        offset += r;
         printf("%s", buf);
     }
-    
     printf("Connection Established.\n");
     char *inject = "HTTP/1.0 200 Connection established\r\n\r\n";
     write(clientfd, inject, strlen(inject));
@@ -253,39 +185,37 @@ void proxyhttps(int clientfd, int serverfd){
 
     printf("SSL handshake finished. Reading content.\n");
     printf("%% SSL REQUEST %%\n");
-    total = 0;
+
     if((r = SSL_read(ssl_c->socket, buf, 1024)) > 0){
         if (offset > 1024){
             printf("payload exceded allocated space\n");
             exit(4);
         }
-        total+=r;
+        printf("%s", buf);
         SSL_write(ssl_s->socket, buf, r);
-        buf[r] = '\0';
-        printf("%s (%d)", buf,r );
 
     }
+
     fflush(stdout);
     // send response
-    if (!total) goto done;
     printf("%% SERVER RESPONSE %%\n");
+    offset=1;
     while ((r=SSL_read(ssl_s->socket, buf, 1023))>0){
         
+        offset++;
         SSL_write(ssl_c->socket, buf, r);
         buf[r] = '\0';
         printf("%s", buf);
-        if (buf[r-1]==EOF ) break;
     }
-    done:
     printf("closing connection\n");
     SSL_Close(ssl_s);
-    if (ssl_c != (SSL_Connection*) 0) SSL_Close(ssl_c);
+    SSL_Close(ssl_c);
 
 }
 
 
 /*
-int proxyHTTPS(struct HTTPRequest* req, struct SSLConnection* ssls, int clientfd, int serverfd){
+int proxyHTTPS(HTTPRequest* req, struct SSLConnection* ssls, int clientfd, int serverfd){
     // Establish SSL handshake with both sides
     struct SSLConnection *sslc;
     struct SSLConnection __sslc;
@@ -376,7 +306,7 @@ int proxyHTTPS(struct HTTPRequest* req, struct SSLConnection* ssls, int clientfd
     return 0;
 }*/
 /*
-   int proxyHTTPS(struct HTTPRequest* req, FILE* c_rfd, FILE* c_wfd, FILE* s_rfd, FILE* s_wfd){
+   int proxyHTTPS(HTTPRequest* req, FILE* c_rfd, FILE* c_wfd, FILE* s_rfd, FILE* s_wfd){
    char line[10000];
    struct timeval timeout;
    fd_set fdset;

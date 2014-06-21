@@ -9,14 +9,14 @@ LFLAGS=-lssl -lcrypto
 EXE=proxy
 
 #Obj files, build location
-OBJS=utils.o tcp.o http.o main.o
+OBJS=utils.o tcp.o http.o main.o ssl.o reader.o
 OBJ_DIR=build
 OBJS_OUTPUT=$(addprefix $(OBJ_DIR)/,$(OBJS))
 
 #Source file location
 SRC_DIR=src
 
-all: $(OBJ_DIR) main
+all: $(OBJ_DIR) clean main
 
 main: $(OBJS_OUTPUT)
 	$(CC) $(LFLAGS) $^ -o $(EXE)

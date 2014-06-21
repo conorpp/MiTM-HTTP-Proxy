@@ -5,8 +5,8 @@ struct addrinfo* getTCPInfo(char *hostname, char* port){
     struct addrinfo hints, *res;
     int ec;
     memset(&hints, 0, sizeof hints);
-    // Use IPv6 or IPv4
-    hints.ai_family = AF_UNSPEC;
+    // Use IPv4
+    hints.ai_family = AF_INET;
     // Use TCP
     hints.ai_socktype = SOCK_STREAM;
     // Lookup host
