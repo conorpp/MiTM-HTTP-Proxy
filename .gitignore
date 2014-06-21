@@ -3,5 +3,7 @@
 ref
 a.out
 proxy
+build/
 *.o
 *.swp
+
