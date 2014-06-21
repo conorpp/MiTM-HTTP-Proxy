@@ -1,34 +1,39 @@
 
 
+#Compiling/linking
 CC=clang
 CFLAGS=-c -Wall
 LFLAGS=-lssl -lcrypto
+
+#Output executable name
 EXE=proxy
 
-default: main
+#Obj files, build location
+OBJS=utils.o tcp.o http.o main.o
+OBJ_DIR=build
+OBJS_OUTPUT=$(addprefix $(OBJ_DIR)/,$(OBJS))
 
-main: utils.o tcp.o http.o main.o
-	$(CC) $(LFLAGS) utils.o tcp.o http.o main.o -o $(EXE)
+#Source file location
+SRC_DIR=src
 
-main.o: main.c
-	$(CC) $(CFLAGS) main.c
+all: $(OBJ_DIR) main
 
-tcp.o: tcp.c
-	$(CC) $(CFLAGS) tcp.c
+main: $(OBJS_OUTPUT)
+	$(CC) $(LFLAGS) $^ -o $(EXE)
 
-utils.o: utils.c
-	$(CC) $(CFLAGS) utils.c
+$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
+	$(CC) $(CFLAGS) $< -o $@
 
-http.o: http.c
-	$(CC) $(CFLAGS) http.c
+clean: 
+	rm -rf $(OBJ_DIR)/*.o $(EXE)
 
-test: $(EXE)
+$(OBJ_DIR):
+	mkdir $@
+
+run:
 	./proxy 9999 cert.pem privkey.pem
 
-clean:
-	rm -rf *.o $(EXE)
-
-$(EXE): clean main
+$(EXE): clean main run
 
 #run: proxy
 #    ./proxy 9999 cert.pem privkey.pem
