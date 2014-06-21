@@ -3,7 +3,9 @@
 */
 
 #include "utils.h"
-#include "sslUtils.h"
+#include "tcp.h"
+#include "http.h"
+#include "ssl.h"
 
 struct SSLConnection {
     int socket;
@@ -21,7 +23,7 @@ void proxyhttps(int clientfd, int serverfd);
 int main(int argc, char *argv[]){
     struct sockaddr_storage their_addr;
     socklen_t slen;
-    int ec, sockfd, newfd;
+    int sockfd, newfd;
     if (argc<4){
         die("you forgot port , cert , privkey\n");
     }
@@ -150,7 +152,7 @@ void proxyhttps(int clientfd, int serverfd){
     SSL_Connection* ssl_c;
     SSL_Connection* ssl_s = SSL_Connect(serverfd);
     
-    int timeToSend = 0, connected = 0, r=0;
+    int r=0;
     char buf[1024];
     
     printf("got new connection.  \n");
