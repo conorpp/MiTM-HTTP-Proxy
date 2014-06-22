@@ -1,6 +1,62 @@
 #include "http.h"
 
 
+HTTPStore* store(char* data, int length, int flags){
+    static char buffer[STORE_SIZE];
+    static HTTPStore S;
+    if (data != (char*)0){
+        if (S.length + length > STORE_SIZE)
+            die("store:  memory exceeded.");
+        memmove(&buffer[S.length], data, length);
+        S.length += length;
+    }else{
+        S.buf = buffer;
+        S.length = 0;
+        S.offset = 0;
+        if (IS_REQ(flags))
+            S.state = E_readMethod;
+        else 
+            S.state = E_readStatus;
+        S.contentLength = 0;
+        S.headerLength = 0;
+        S.headers = buffer;
+        S.content = buffer;
+    }
+    return &S;
+}
+
+void printHTTPHeaders(HTTPHeader **header){
+    HTTPHeader** tmp = header;
+    printf("\n");
+    while(*tmp != (HTTPHeader*)0){
+        printf("%s: %s\n", (*tmp)->header, (*tmp)->data);
+        tmp = &((*tmp)->next);
+    }
+    printf("\n");
+}
+
+
+
+int parseHTTPHeader(HTTPHeader** header, char* httpbuf){
+    static char headertype[100], data[1000];
+    int ec;
+    ec = sscanf(httpbuf, "%100[^:] %*[: ] %1000[^\r\n]",
+            headertype, data);
+
+    if (ec == 2){
+        addHTTPHeader(header, headertype, data);
+        return (strlen(headertype) + strlen(data) + 4);
+    }else
+        if (
+                strncasecmp(httpbuf, "\n\n", 2) == 0 ||
+                strncasecmp(httpbuf, "\r\n\r\n", 4) 
+           ){
+            return 0;
+    }
+
+    return -1;
+}
+
 void getHTTPHeaderType(HTTPHeader* head, char *str){
     static char* headerStrs[] = {
         "Host",
@@ -8,9 +64,9 @@ void getHTTPHeaderType(HTTPHeader* head, char *str){
         "Content-length"
     };
     static int headerTypes[] = {
-        HTTP_HOST,
-        HTTP_A_ENCODING,
-        HTTP_CL
+        HTTPH_HOST,
+        HTTPH_A_ENCODING,
+        HTTPH_CL
     };
     static int count = 3;
     for(int i=0; i<count; i++){
@@ -22,7 +78,7 @@ void getHTTPHeaderType(HTTPHeader* head, char *str){
             return;
         }
     }
-    head->type = HTTP_UNKNOWN;
+    head->type = HTTPH_UNKNOWN;
     int l = strlen(str)+1;
     head->header = malloc(l);
     memmove(head->header, str, l);
@@ -65,7 +121,7 @@ void freeHTTPHeaders(HTTPHeader** first){
         tmp = &((*tmp)->next);
         if ((*last)->data != (char*) 0)
             free((*last)->data);
-        if ((*last)->type == HTTP_UNKNOWN && (*last)->header != (char*) 0)
+        if ((*last)->type == HTTPH_UNKNOWN && (*last)->header != (char*) 0)
             free((*last)->header);
         free(*last);
         *last = (HTTPHeader*) 0;
