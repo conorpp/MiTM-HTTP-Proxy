@@ -1,4 +1,5 @@
 #include "ssl.h"
+#include "http.h"
 
 
 void SSL_Init(char *certFile, char* privKeyFile){
@@ -21,6 +22,18 @@ void SSL_Init(char *certFile, char* privKeyFile){
     }
 }
 
+void SSLWrap(void *http, int flags){
+    HttpTransaction* T = (HttpTransaction*) http;
+    T->is_ssl = 1;    
+    if (IS_SSL_ACCEPT(flags)){
+        char *connected = "HTTP/1.0 200 Connection established\r\n\r\n";
+        write(T->socket, connected, strlen(connected));
+        T->SSL = SSL_Accept(T->socket);
+    }else{
+        T->SSL = SSL_Connect(T->socket);
+    }
+
+}
 
 SSL_Connection* SSL_Connect(int sockfd){
     SSL_Connection* sslcon = malloc(sizeof(SSL_Connection));
