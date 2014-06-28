@@ -32,7 +32,7 @@ void SSLWrap(void *http, int flags){
     }else{
         T->SSL = SSL_Connect(T->socket);
     }
-
+    T->store = newHttpStore(HTTPS | flags);
 }
 
 SSL_Connection* SSL_Connect(int sockfd){
@@ -41,16 +41,23 @@ SSL_Connection* SSL_Connect(int sockfd){
         die("SSL_Connection: malloc returned NULL");
     
     sslcon->handle = SSL_CTX_new(SSLv23_client_method());
+    
+//    BIO* sbio = BIO_new(BIO_s_socket());
+
     if (sslcon->handle == (SSL_CTX*) 0)
         ERR_print_errors_fp (stderr);
     
     sslcon->socket = SSL_new(sslcon->handle);
     if (sslcon->socket == (SSL*) 0)
         ERR_print_errors_fp (stderr);
+//    
+//    if ( BIO_set_fd(sbio, sockfd, BIO_NOCLOSE) != 1 )
+//        ERR_print_errors_fp (stderr);
     
-    if ( SSL_set_fd(sslcon->socket, sockfd) != 1 )
-        ERR_print_errors_fp (stderr);
-    
+//    SSL_set_bio(sslcon->socket, sbio, sbio);
+
+    SSL_set_fd(sslcon->socket, sockfd);
+
     if (SSL_connect(sslcon->socket) != 1)
         ERR_print_errors_fp (stderr);
     
@@ -63,15 +70,20 @@ SSL_Connection* SSL_Accept(int sockfd){
     
     sslcon->handle = SSL_SERVER_HANDLE;
     sslcon->socket = SSL_new(sslcon->handle);
+//    BIO* sbio=BIO_new(BIO_s_socket());   
     
     if (sslcon->socket == (SSL*) 0)
         ERR_print_errors_fp (stderr);
     
-    if ( SSL_set_fd(sslcon->socket, sockfd) != 1 )
-        ERR_print_errors_fp (stderr);
-    
+//    if ( BIO_set_fd(sbio, sockfd, BIO_NOCLOSE) != 1 )
+//        ERR_print_errors_fp (stderr);
+
+//    SSL_set_bio(sslcon->socket, sbio, sbio);
+    SSL_set_fd(sslcon->socket, sockfd);
+
     if (SSL_accept(sslcon->socket) != 1)
         ERR_print_errors_fp (stderr);
+
     return sslcon;
 }
 

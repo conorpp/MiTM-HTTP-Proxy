@@ -17,10 +17,10 @@ typedef struct{
 SSL_CTX* SSL_SERVER_HANDLE;
 
 // Wraps a http structure with ssl
-#define SSL_ACCEPT (1 << 0)
-#define SSL_CONNECT (1 << 1)
-#define IS_SSL_ACCEPT(x) ((x)&1)
-#define IS_SSL_CONNECT(x) ((x)&2)
+#define SSL_ACCEPT  (1 << 24)
+#define SSL_CONNECT (1 << 25)
+#define IS_SSL_ACCEPT(x) ((x)&(1<<24))
+#define IS_SSL_CONNECT(x) ((x)&(1<<25))
 void SSLWrap(void *http, int flags);
 
 //Load libraries for SSL and init globals.

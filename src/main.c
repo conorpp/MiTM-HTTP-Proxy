@@ -16,7 +16,6 @@ struct SSLConnection {
 
 int proxyHttp(int clientfd);
 
-void dumpStore(HttpStore*);
 
 int main(int argc, char *argv[]){
     
@@ -40,7 +39,6 @@ int main(int argc, char *argv[]){
         //TODO make a header/helper function for this
         slen = sizeof their_addr;
         newfd = accept(sockfd, (struct sockaddr *)&their_addr, &slen);
-        printf("--New Connection--\n");
         
         if (newfd == -1){
             perror("accept"); continue;
@@ -58,19 +56,39 @@ int main(int argc, char *argv[]){
 
     return 0;
 }
+
+int getChunks(char* buf, HttpStore* httpStore){
+    int length;
+    char *newline = strchr(buf, '\n');
+    if ( sscanf(buf,"%x", &length) == 1){
+        if (length) return length + newline + 3- buf;
+        else return 0;
+    }
+    else if(strncasecmp(buf,"\r\n",2)==0)
+        return 0;
+
+    return -1;
+}
+
 int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
-    //static char headertype[1000], data[1000];
-    //int ec;
     char* httpbuf = http_store->buf;
     int l;
-    if (http_store->state == E_connect)
+    if (http_store->state == E_connect){
         http_store->state = E_readHeader;
+    }
     switch(http_store->state){
         case E_reReadMethod:
+            //printf("--reReading method\n");
         case E_readMethod:
-            http_store->offset = HttpParseMethod((HttpRequest*)http, httpbuf);
-            http_store->headers = &httpbuf[http_store->offset];
-            HttpRequest* req = (HttpRequest*) http;
+        case E_readStatus:
+            //printf("--Reading method\n");
+            if (http_store->state == E_readStatus)
+                http_store->offset = HttpParseStatus((HttpResponse*)http, httpbuf);
+            else
+                http_store->offset = HttpParseMethod((HttpRequest*)http, httpbuf);
+            
+            http_store->headers = httpbuf + http_store->offset;
+            //HttpRequest* req = (HttpRequest*) http;
             //printf("reading method. %s %s %s\n",
             //        req->method, req->path, req->protocol);
             if (http_store->state == E_readMethod)
@@ -79,33 +97,37 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 return (http_store->state = E_readHeader);
                 
         break;
-        case E_readStatus:
-            // Parse the first line in Http Response
-            http_store->offset = HttpParseStatus((HttpResponse*)http, httpbuf);
-            //printf("--reading status %d / %d\n", http_store->length - http_store->offset, http_store->contentLength );
-            return (http_store->state = E_readHeader);
-        break;
         case E_readHeader:
-            httpbuf = &http_store->buf[http_store->offset];
+            httpbuf = http_store->buf + http_store->offset;
             // Parse all available headers.
-            
-            //printf("reading headers %d / %d\n", http_store->length - http_store->offset, http_store->contentLength );
             while((l = HttpParseHeader(header, httpbuf)) > 0){
+                if (http_store->offset > http_store->length){
+                    printf("--EXCEEDING STORE SIZE %d\n", http_store->length);
+                    // printf("%s\n", httpbuf);
+                    exit(0);
+                }
                 http_store->offset += l;
-                httpbuf = &http_store->buf[http_store->offset];
+                httpbuf = http_store->buf + http_store->offset;
             }
-            printHttpHeaders(header);
+            if (l==0) http_store->offset += 2; // add CRLF
+            //printHttpHeaders(header);
             if (l == 0){
                 // Req/Res is finished unless there is content.
-                http_store->headerLength = &httpbuf[http_store->offset] - http_store->headers;
+                http_store->headerLength = http_store->offset ;
                 http_store->content = &httpbuf[http_store->offset];
                 HttpHeader* h = getHttpHeader(*header, HTTPH_CL);
-                if (h == (HttpHeader*) 0)
-                    http_store->state = E_finished;
-                else{
+                if (h != (HttpHeader*) 0){
                     http_store->contentLength = atol(h->data);
                     http_store->state = http_store->contentLength ? E_readContent : E_finished;
-                }
+
+                }else if((h = getHttpHeader(*header, HTTPH_T_ENCODING)) != (HttpHeader*) 0){
+                    if (strncasecmp(h->data, "chunked", 7) == 0){
+                        http_store->state = E_readChunks;
+                    }else
+                        http_store->state = E_finished;
+                }else
+                    http_store->state = E_finished;
+
                 break;
             }else{
                 // Still waiting for headers.
@@ -125,10 +147,26 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
             // Check if the content length has been met.
             if (http_store->length - http_store->offset >= http_store->contentLength){
                 http_store->state = E_finished;
-                printf("--E_readContent-finished\n");
+            //    printf("--E_readContent-finished\n");
             }else{
-                printf("--E_readContent-continue\n");
+            //    printf("--E_readContent-continue\n");
                 http_store->state = E_continue;
+            }
+        break;
+        case E_readMoreChunks:
+            http_store->state = E_readChunks;
+        case E_readChunks:
+            httpbuf = http_store->buf+http_store->offset;
+            while( (l=getChunks(httpbuf, http_store)) > 0 ){
+                http_store->offset += l;
+                httpbuf += l;
+                printf("got %d chunks\n",l);
+            }
+            if (l == 0){
+                http_store->state = E_finished;
+            }
+            else{
+                http_store->state = E_readMoreChunks;
             }
         break;
     }
@@ -140,36 +178,41 @@ int proxyHttp(int clientfd){
     HttpRequest req;
     HttpResponse res;
     
-    HttpWrap(&req, clientfd);
+    HttpWrap(&req, clientfd, HTTP_REQ);
 
     char line[1000];
-    HttpStore* http_store;
     
-    http_store = store(NULL, 0, HTTP_REQ);
-    printf("new connection\n"); 
-    while ((HttpRead(&req, http_store)) > 0){
-        if (HttpParse(&req, &req.header, http_store) == E_connect){
-            serverfd =  Connect(req.host, req.port);
-            HttpWrap(&res, serverfd);
-            if (req.is_ssl){
-                printf("PROXYING SSL\n");
-                SSLWrap(&req, SSL_ACCEPT | HTTP_REQ);
-                SSLWrap(&res, SSL_CONNECT | HTTP_RES);
-                http_store = store(NULL, 0, HTTP_REQ);
-                http_store->state = E_reReadMethod;
-                continue;
-            }
-        }
-        if (HttpParse(&req, &req.header, http_store) == E_finished)
-            break;        
+    while ((HttpRead(&req)) > 0){
+        do{
+            s = HttpParse(&req, &req.header, req.store);
+            if (s == E_connect){
+                serverfd =  Connect(req.host, req.port);
+                HttpWrap(&res, serverfd, HTTP_RES);
+                if (req.is_ssl){
+                    SSLWrap(&req, SSL_ACCEPT | HTTP_REQ);
+                    SSLWrap(&res, SSL_CONNECT | HTTP_RES);
+                    s = 0;
+                }
 
+            }
+        }while(HTTP_IS_PARSING(s));
+            
+        if (s == E_finished)
+            break;
+
+        dumpStore(req.store);
     }
-    printf("\n-%%- Request -%%-\n") ;
+    if (req.method == (char*)0){
+        printf("--junk request received.\n");
+        goto done;
+    }
+    printf("\n-%%- Request(%d) -%%-\n", clientfd) ;
     
     // Write the request
+    
     sprintf(line, "%s %s %s\r\n", req.method, req.path, req.protocol);
-    HttpWrite(&res, line, strlen(line));
     write(fileno(stdout), line, strlen(line));
+    HttpWrite(&res, line, strlen(line));
 
     // write custom headers
     HttpHeader* H;
@@ -191,28 +234,26 @@ int proxyHttp(int clientfd){
     write(fileno(stdout), "\r\n", 2);
     
     // write any content if there was any
-    HttpWrite(&res, http_store->content, http_store->contentLength);
-    write(fileno(stdout), http_store->content, http_store->contentLength);
+    HttpWrite(&res, req.store->content, req.store->contentLength);
+    write(fileno(stdout), req.store->content, req.store->contentLength);
     
     // Retrieve response
-    printf("\n-%%- RESPONSE -%%-\n");
-    http_store = store(NULL, 0, HTTP_RES);
-    while( (HttpRead(&res, http_store)) > 0 ){
-        //(void) store(line, r, 0);
+    printf("\n-%%- RESPONSE(%d) -%%-\n", clientfd);
+    while( (HttpRead(&res)) > 0 ){
         do {
-           s = HttpParse(&res, &res.header, http_store);
-        }while(s == E_readHeader || s == E_readContent);
-
+           s = HttpParse(&res, &res.header, res.store);
+        }while(HTTP_IS_PARSING(s));
         if (s == E_finished)
             break;
     }
-    printf("DONE:\n");
-    //printHttpHeaders(&res.header);
-    write(fileno(stdout), http_store->buf, http_store->length);
-    HttpWrite(&req, http_store->buf, http_store->length);
+    HttpWrite(&req, res.store->buf, res.store->length);
+    printf("%s %d %s\n", res.protocol, res.status, res.comment);
+    printHttpHeaders(&res.header);
     
+    done:
     freeHttpRequest(&req);
     freeHttpResponse(&res);
+    close(serverfd);
 
     return 0;
 }

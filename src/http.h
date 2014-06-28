@@ -17,6 +17,19 @@ typedef struct _HttpHeader{
     struct _HttpHeader* next;   // pointer to next Http header
 } HttpHeader;
 
+// Stateful header for processing saved Http req/res data
+typedef struct{
+    char* buf;          // Stored data
+    int size;           // Storage capacity
+    int length;         // length of stored data
+    int offset;         // length of data that's been processed
+    int state;          // the state of the transaction
+    char* headers;      // pointer to start of headers in data
+    char* content;      // pointer to start of content in data
+    int contentLength;  // how long content is
+    int headerLength;   // how long headers is
+}HttpStore;
+
 // Important information from a Http request.
 typedef struct{
     char* method,       // Http method e.g. "GET", "CONNECT"
@@ -29,6 +42,7 @@ typedef struct{
         is_ssl;         // Http/HttpS
     SSL_Connection* SSL;// SSL Handle attributes
     HttpHeader* header;
+    HttpStore* store;
 } HttpRequest;
 
 // Important information from a Http response.
@@ -43,6 +57,7 @@ typedef struct{
         is_ssl;
     SSL_Connection* SSL;
     HttpHeader* header;
+    HttpStore* store;
 } HttpResponse;
 
 // Optional Intermediate form for HTTP req/res
@@ -57,53 +72,54 @@ typedef struct{
         is_ssl;
     SSL_Connection* SSL;
     HttpHeader* header;
+    HttpStore* store;
 } HttpTransaction;
-
-// Stateful header for processing saved Http req/res data
-typedef struct{
-    char* buf;          // Stored data
-    int length;         // length of stored data
-    int offset;         // length of data that's been processed
-    int state;          // the state of the transaction
-    char* headers;      // pointer to start of headers in data
-    char* content;      // pointer to start of content in data
-    int contentLength;  // how long content is
-    int headerLength;   // how long headers is
-}HttpStore;
 
 // Possible states for an HttpStore 
 enum HttpState{ 
-    E_readMethod=0,     // reading first line of Http request.
-    E_reReadMethod,   // reading first line of Https request.
-    E_readStatus,       // reading first line Http response.
-    E_connect,          // connecting to host.
-    E_readHeader,       // reading the header.
-    E_readContent,      // reading the content.
-    E_continue,         // Read more data
-    E_finished          // all data has been processed.
+    E_readMethod     =  0,      // reading first line of Http request.
+    E_reReadMethod   = (1),     // reading first line of Https request.
+    E_readStatus     = (1<<1),  // reading first line Http response.
+    E_connect        = (1<<2),  // connecting to host.
+    E_readHeader     = (1<<3),  // reading the header.
+    E_readContent    = (1<<4),  // reading the content.
+    E_readChunks     = (1<<5),  // reading the content.
+    E_readMoreChunks = (1<<6),  // reading the content.
+    E_continue       = (1<<7),  // Read more data
+    E_finished       = (1<<8)   // all data has been processed.
 };
 
-// Store data from an Http transaction.
-// Statically allocated so it may only be
-// used for one transaction per process at
-// a time.
-///@param data: the data to be store. Pass in NULL
-///             to reset the store and use flags.
-///@param length: how much of the data to store.
+// Indicate if the data in the HttpStore has all been parsed 
+// or if it still has some left.
+#define HTTP_IS_PARSING(x) \
+    (((x)&4)|((x)&8)|((x)&16)|((x)&32))
+
+// Get a new store for storing Http data.
 ///@param flags: pass in one of the macros below.
-///              Only when store is reset.
-#define STORE_SIZE 1000000      // data cap for Http transaction
+#define STORE_SIZE (1 << 14)    // initial data cap for Http transaction
 #define HTTP_REQ (1 << 0)       // Http transaction is a request
 #define HTTP_RES (1 << 1)       // Http transaction is a response
-#define IS_HTTP_REQ(x) (x&1) 
-#define IS_HTTP_RES(x) (x&2)
-HttpStore* store(char* data, int length, int flags);
+#define HTTPS (1 << 2)          // Http will occur over ssl
+
+#define IS_HTTP_REQ(x)  ((x)&0x1) 
+#define IS_HTTP_RES(x)  ((x)&0x2)
+#define IS_HTTPS(x)     ((x)&0x4)
+HttpStore* newHttpStore(int flags);
+
+// Free an allocated http store
+///@param S: pointer to an allocated HttpStore to free.
+void freeHttpStore(HttpStore* S);
 
 // Reads from an HTTP Response or Request
 // and stores it in an HttpStore
-int HttpRead(void* http, HttpStore* http_store);
+///@param http: a Http Request or Response to read from
+int HttpRead(void* http);
 
-// Writes "num" bytes from buffer to a HTTP request or response 
+// Write bytes from buffer to a HTTP request or response 
+///@param http: the http request (client) or response (server)
+///             to write to.
+///@param buffer: pointer to bytes to be written.
+///@param num: the number of bytes to write.
 void HttpWrite(void* http, void* buffer, int num);
 
 // Writes the full contents of a http store to stdout
@@ -132,6 +148,7 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf);
 #define HTTPH_HOST 1            // Host
 #define HTTPH_A_ENCODING 2      // Accept-encoding
 #define HTTPH_UNKNOWN 3         // Other
+#define HTTPH_T_ENCODING 4
 void getHttpHeaderType(HttpHeader* head, char *str);
 
 // Adds a Http header for string representations of a header
@@ -163,7 +180,7 @@ void parseURL(const char* url, char** host, char** path, int* port, int *ssl);
 void freeURL(char* host, char* path);
 
 // Wraps a TCP connection with Http structure
-void HttpWrap(void* http, int sockfd);
+void HttpWrap(void* http, int sockfd, int flags);
 
 // parses the first line of an Http request and adds
 // information to HttpRequest structure

@@ -1,29 +1,34 @@
 #include "http.h"
 
-int HttpRead(void* http, HttpStore* http_store){
-    int r, nbytes = STORE_SIZE - http_store->length;
-    char* buffer = http_store->buf + http_store->length;
-    
-    if (nbytes < 1){
-        die("HttpRead: store: memory exceded.");
-    }
+int HttpRead(void* http){
     HttpTransaction* T = (HttpTransaction*) http;
-    
-    if (T->is_ssl)
-        r = SSL_read(T->SSL->socket, buffer, nbytes);
+    int r=0, nbytes;
+    char* buffer;
+    while ((nbytes = T->store->size - T->store->length) < 1){
+        T->store->size *= 4;
+        T->store->buf = realloc(T->store->buf, T->store->size);
+        printf("--Store: memory exceded. 4x more space made.\n");
+        printf("--space: %d kb\n", T->store->size / (1<<10));
+    }
+    buffer = T->store->buf + T->store->length;
+    if (T->is_ssl){
+        while( (r += SSL_read(T->SSL->socket, buffer, nbytes))>0){
+            if (r > 0) break;
+        }
+    }
     else
         r = read(T->socket, buffer, nbytes);
-
-    http_store->length += r;
+    T->store->length += r;
     
     return r;
 }
 void HttpWrite(void* http, void* buffer, int num){
-    int ec;
+    int ec=0;
     HttpTransaction* T = (HttpTransaction*) http;
     
-    if (T->is_ssl)
-        ec = SSL_write(T->SSL->socket, buffer, num);
+    if (T->is_ssl){
+        while( (ec += SSL_write(T->SSL->socket, buffer, num))<num);
+    }
     else
         ec = write(T->socket, buffer, num);
 
@@ -37,35 +42,46 @@ void dumpStore(HttpStore* http_store){
     write(fileno(stdout), http_store->buf, http_store->length);
     fflush(stdout);
 }
-void HttpWrap(void* http, int sockfd){
+
+void HttpWrap(void* http, int sockfd, int flags){
     memset(http,  0, sizeof(HttpTransaction));
     HttpTransaction* T = (HttpTransaction*) http;
     T->socket = sockfd;
+    T->store = newHttpStore(flags);
 }
 
-HttpStore* store(char* data, int length, int flags){
-    static char buffer[STORE_SIZE];
-    static HttpStore S;
-    if (data != (char*)0){
-        if (S.length + length > STORE_SIZE)
-            die("store:  memory exceeded.");
-        memmove(&buffer[S.length], data, length);
-        S.length += length;
-    }else{
-        S.buf = buffer;
-        S.length = 0;
-        S.offset = 0;
-        if (IS_HTTP_REQ(flags))
-            S.state = E_readMethod;
-        else 
-            S.state = E_readStatus;
-        S.contentLength = 0;
-        S.headerLength = 0;
-        S.headers = buffer;
-        S.content = buffer;
-    }
-    return &S;
+HttpStore* newHttpStore(int flags){
+    char* buffer = malloc(STORE_SIZE);
+    HttpStore* S = malloc(sizeof(HttpStore));
+    memset(S, 0, sizeof(HttpStore));
+    S->buf = buffer;
+    if (IS_HTTP_REQ(flags) && !IS_HTTPS(flags))
+        S->state = E_readMethod;
+    else if (IS_HTTP_REQ(flags) && IS_HTTPS(flags))
+        S->state = E_reReadMethod;
+    else if (IS_HTTP_RES(flags))
+        S->state = E_readStatus;
+    S->headers = buffer;
+    S->content = buffer;
+    S->size = STORE_SIZE;
+
+    return S;
 }
+
+void freeHttpStore(HttpStore* S){
+    if (S != (HttpStore*) 0){
+        if (S->buf != (char*) 0)
+            free(S->buf);
+        free(S);
+    }
+}
+
+//int store(HttpStore* S, char* data, int length, int flags){
+//    if (S->length + length > STORE_SIZE)
+//        die("store:  memory exceeded.");
+//    memmove(buffer+S.length, data, length);
+//    return (S.length += length);
+//}
 
 void printHttpHeaders(HttpHeader **header){
     HttpHeader** tmp = header;
@@ -82,18 +98,29 @@ void printHttpHeaders(HttpHeader **header){
 int HttpParseHeader(HttpHeader** header, char* httpbuf){
     static char headertype[100], data[1000];
     int ec;
-    ec = sscanf(httpbuf, "%100[^:] %*[: ] %1000[^\r\n]",
+
+    if (
+            strncasecmp(httpbuf, "\r\n", 2) == 0 ||
+            strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 ||
+            strlen(httpbuf) == 0
+       ){
+        return 0;
+    }
+
+    ec = sscanf(httpbuf, "%100[^: ] %*[: ] %1000[^\r\n]",
             headertype, data);
 
     if (ec == 2){
         addHttpHeader(header, headertype, data);
+        //printf("added header %s: %s\n", headertype,data);
         return (strlen(headertype) + strlen(data) + 4);
-    }else
-        if (
-                strncasecmp(httpbuf, "\n\n", 2) == 0 ||
-                strncasecmp(httpbuf, "\r\n\r\n", 4) 
-           ){
-            return 0;
+    }else{
+            printf("--leftover str:%s\n", httpbuf);
+            printf("--bytes: ");
+            exit(4);
+            while(*httpbuf)
+                printf(" %x", *httpbuf++);
+            fflush(stdout);
     }
 
     return -1;
@@ -103,14 +130,16 @@ void getHttpHeaderType(HttpHeader* head, char *str){
     static char* headerStrs[] = {
         "Host",
         "Accept-Encoding",
-        "Content-length"
+        "Content-length",
+        "Transfer-Encoding"
     };
     static int headerTypes[] = {
         HTTPH_HOST,
         HTTPH_A_ENCODING,
-        HTTPH_CL
+        HTTPH_CL,
+        HTTPH_T_ENCODING
     };
-    static int count = 3;
+    static int count = 4;
     for(int i=0; i<count; i++){
         if (strncasecmp(
             headerStrs[i], str, strlen(str)
@@ -196,10 +225,16 @@ int HttpParseMethod(HttpRequest* req, const char* str){
     memmove(req->protocol, protocol, size);
     total += size;
 
-    parseURL(req->url, &req->host, &req->path, &req->port, &req->is_ssl);
+    if (!req->is_ssl){
+        parseURL(req->url, &req->host, &req->path, &req->port, &req->is_ssl);
 
-    printf("allcataed %s %s %s\n", req->method, req->url, req->protocol);
-    if (strncasecmp(req->method, "CONNECT", 7) == 0) req->is_ssl = 1;
+        if (strncasecmp(req->method, "CONNECT", 7) == 0){
+            req->is_ssl = 1;
+        }
+    }else{
+        req->path = req->url;
+    }
+    fflush(stdout);
     return total + 1; // two spaces, \r, \n
 }
 
@@ -214,12 +249,10 @@ int HttpParseStatus(HttpResponse* res, const char* str){
     static char *comment = &HTTP_BUF[101];
 
     int size, total = 0;
-
     if(sscanf(str, "%100s %d %1000[^\r\n]", protocol, &res->status, comment)!=3){
        printf("%s\n",str); 
         die("invalid Http response");
     }
-    //printf("--status:%s %d %s", protocol, res->status, comment);
     res->comment = (char *) malloc( (size = strlen(comment)+1) );
     memmove(res->comment, comment, size);
     total += size;
@@ -228,7 +261,7 @@ int HttpParseStatus(HttpResponse* res, const char* str){
     memmove(res->protocol, protocol, size);
     total += size;
 
-    return total + 1; // two spaces, \r, \n
+    return total+2+3; // \r + \n, 2-3 spaces
 }
 
 
@@ -243,11 +276,9 @@ void parseURL(const char* url, char** host, char** path, int* port, int* ssl){
         *ssl = 1;
     else 
         offset = 0;
-    printf("got url %s\n", url);
     if (sscanf(&url[offset], "%[^/:]", HTTP_BUF) != 1){
         memmove(HTTP_BUF, url, strlen(url)+1);
     }
-    printf("moved %s\n", HTTP_BUF);
 
     offset += (size = strlen(HTTP_BUF)+1);
     *host = (char*) malloc(size);
@@ -281,10 +312,11 @@ void freeHttpRequest(HttpRequest* req){
         free(req->url);
     if (req->protocol != (char*) 0)
         free(req->protocol);
-
     if (req->SSL != (SSL_Connection*) 0)
         SSL_Close(req->SSL);
-    
+    if (req->is_ssl)
+        req->path = (char*) 0;
+    freeHttpStore(req->store);
     freeURL(req->host, req->path);
     freeHttpHeaders(&req->header);
 }
@@ -297,7 +329,7 @@ void freeHttpResponse(HttpResponse* res){
 
     if (res->SSL != (SSL_Connection*) 0)
         SSL_Close(res->SSL);
-
+    freeHttpStore(res->store);
     freeHttpHeaders(&res->header);
 }
 
