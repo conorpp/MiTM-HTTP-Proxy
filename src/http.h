@@ -82,17 +82,18 @@ enum HttpState{
     E_readStatus     = (1<<1),  // reading first line Http response.
     E_connect        = (1<<2),  // connecting to host.
     E_readHeader     = (1<<3),  // reading the header.
-    E_readContent    = (1<<4),  // reading the content.
-    E_readChunks     = (1<<5),  // reading the content.
-    E_readMoreChunks = (1<<6),  // reading the content.
-    E_continue       = (1<<7),  // Read more data
-    E_finished       = (1<<8)   // all data has been processed.
+    E_readMoreHeader = (1<<4),  // reading the header.
+    E_readContent    = (1<<5),  // reading the content.
+    E_readChunks     = (1<<6),  // reading the content.
+    E_readMoreChunks = (1<<7),  // reading the content.
+    E_continue       = (1<<8),  // Read more data
+    E_finished       = (1<<9)   // all data has been processed.
 };
 
 // Indicate if the data in the HttpStore has all been parsed 
 // or if it still has some left.
 #define HTTP_IS_PARSING(x) \
-    (((x)&4)|((x)&8)|((x)&16)|((x)&32))
+    (((x)&4)|((x)&8)|((x)&32)|((x)&64))
 
 // Get a new store for storing Http data.
 ///@param flags: pass in one of the macros below.
@@ -162,7 +163,7 @@ HttpHeader* getHttpHeader(HttpHeader* first, int type);
 void freeHttpHeaders(HttpHeader** first);
 
 // Buffer to reuse for reading/writing
-#define HTTP_BUF_SIZE 10000
+#define HTTP_BUF_SIZE 20000
 static char HTTP_BUF[HTTP_BUF_SIZE];
 
 // Parses a given url and fills in the host and path pointers.
