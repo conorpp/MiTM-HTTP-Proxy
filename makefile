@@ -2,7 +2,7 @@
 
 #Compiling/linking
 CC=clang
-CFLAGS=-c -Wall
+CFLAGS=-c -Wall 
 LFLAGS=-lssl -lcrypto
 
 #Output executable name
@@ -34,6 +34,11 @@ run:
 	./proxy 9999 cert.pem privkey.pem
 
 $(EXE): clean main run
+
+$(EXE)D: debug $(EXE)
+
+debug:
+	CC="$(CC) -D NOFORK"
 
 #run: proxy
 #    ./proxy 9999 cert.pem privkey.pem
