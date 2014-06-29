@@ -1,0 +1,9 @@
+#!/bin/bash
+
+# forge a self signed CA certificate
+# usage: ./forgeCert <Entity-name>
+
+echo -e ".\n.\n.\n$1\n$1\n$1\nprox@u.com" \
+    | openssl req -x509 -new -nodes -key privkey.pem -days 1024 -out cert.pem \
+    &>/dev/null
+
