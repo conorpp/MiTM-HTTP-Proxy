@@ -4,14 +4,12 @@ int HttpRead(void* http){
     HttpTransaction* T = (HttpTransaction*) http;
     int r=0, nbytes;
     char* buffer;
-    printf("---checking buffer size\n");
     while ((nbytes = T->store->size - T->store->length) < 4){
         T->store->size *= 4;
         T->store->buf = realloc(T->store->buf, T->store->size);
         printf("--Store: memory exceded. 4x more space made.\n");
         printf("--space: %d kb\n", T->store->size / (1<<10));
     }
-    printf("---reading up to %d bytes\n", nbytes);
     buffer = T->store->buf + T->store->length;
     if (T->is_ssl){
         while( (r += SSL_read(T->SSL->socket, buffer, nbytes))>0){
@@ -39,10 +37,46 @@ void HttpWrite(void* http, void* buffer, int num){
    
 }
 
-void dumpStore(HttpStore* http_store){
+
+void saveHttpContent(HttpStore* httpStore, char* buf, int length){
+    while(httpStore->contentSpace - httpStore->contentOffset < length){
+        printf("---allocating x4 space for chunk");
+        httpStore->content = realloc(httpStore->content, 
+                (httpStore->contentSpace*=4));
+        printf(" (%d)\n", httpStore->contentSpace);
+    }
+    memmove(httpStore->content+httpStore->contentOffset, buf, length);
+    httpStore->contentOffset += length;
+}
+
+
+int readChunk(HttpStore* httpStore, char* buf){
+    int length;
     
+    char *newline = strchr(buf, '\n');
+    if ( sscanf(buf,"%x", &length) == 1){
+        if (httpStore->offset + length > httpStore->length){
+            printf("-- not enough has been read into the buffer for length %d\n", length);
+            
+            return -1;
+        }
+        saveHttpContent(httpStore, newline+1, length);
+        httpStore->contentLength += length;
+        
+        if (length) return length + newline + 3- buf;
+        else return 0;
+    }
+    else if(strncasecmp(buf,"\r\n",2)==0){
+        return 0;
+    }
+    return -1;
+}
+
+void dumpStore(HttpStore* http_store){
+    printf("+====Dumping Store======+\n"); 
     write(fileno(stdout), http_store->buf, http_store->length);
     fflush(stdout);
+    printf("\n+====================+\n");
 }
 
 void HttpWrap(void* http, int sockfd, int flags){
@@ -64,9 +98,11 @@ HttpStore* newHttpStore(int flags){
     else if (IS_HTTP_RES(flags))
         S->state = E_readStatus;
     S->headers = buffer;
-    S->content = buffer;
+    S->content = malloc(STORE_SIZE);
     S->size = STORE_SIZE;
-
+    S->contentSpace = STORE_SIZE;
+    
+    S->dynamicContent = 1;
     return S;
 }
 
@@ -74,16 +110,33 @@ void freeHttpStore(HttpStore* S){
     if (S != (HttpStore*) 0){
         if (S->buf != (char*) 0)
             free(S->buf);
+        if (S->headerLength && S->headers != (char*) 0)
+            free(S->headers);
+        if (S->dynamicContent && S->content != (char*) 0)
+            free(S->content);
         free(S);
     }
 }
 
-//int store(HttpStore* S, char* data, int length, int flags){
-//    if (S->length + length > STORE_SIZE)
-//        die("store:  memory exceeded.");
-//    memmove(buffer+S.length, data, length);
-//    return (S.length += length);
-//}
+void writeHttpHeaders(void *http, HttpHeader* first){
+    HttpHeader* H;
+    for(H=first; H != (HttpHeader*)0; H=H->next){
+        switch(H->type){
+            case -1://Http_A_ENCODING:
+                sprintf(HTTP_BUF, "%s: deflate\r\n", H->header);    
+            break;
+            default:
+                sprintf(HTTP_BUF, "%s: %s\r\n", H->header, H->data);
+            break;
+        }
+        HttpWrite(http, HTTP_BUF, strlen(HTTP_BUF));
+        printf("%s", HTTP_BUF);
+    }
+
+    // finish header with empty line
+    HttpWrite(http, "\r\n", 2);
+    write(fileno(stdout), "\r\n", 2);
+}
 
 void printHttpHeaders(HttpHeader **header){
     HttpHeader** tmp = header;
@@ -95,7 +148,13 @@ void printHttpHeaders(HttpHeader **header){
     printf("\n");
 }
 
-
+void saveHttpHeaders(HttpStore* S){
+    if (S->headerLength){
+        char* tmp = S->headers;
+        S->headers = malloc(S->headerLength);
+        memmove(S->headers, tmp, S->headerLength);
+    }
+}
 
 int HttpParseHeader(HttpHeader** header, char* httpbuf){
     static char headertype[100], data[10000];
@@ -104,7 +163,6 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
     if (
             strncasecmp(httpbuf, "\r\n", 2) == 0 ||
             strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 
-    //        strlen(httpbuf) == 0
        ){
         return 0;
     }
@@ -113,13 +171,11 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
             headertype, data);
     if (ec == 2){
         addHttpHeader(header, headertype, data);
-        printf("added header %s: %s\n", headertype,data);
         return (strlen(headertype) + strlen(data) + 4);
     }else{
             printf("--leftover str:%s\n", httpbuf);
             printf("--bytes: ");
             return -1;
-            //exit(4);
             while(*httpbuf)
                 printf("%c", *httpbuf++);
             fflush(stdout);
@@ -133,15 +189,17 @@ void getHttpHeaderType(HttpHeader* head, char *str){
         "Host",
         "Accept-Encoding",
         "Content-length",
-        "Transfer-Encoding"
+        "Transfer-Encoding",
+        "Content-Type"
     };
     static int headerTypes[] = {
         HTTPH_HOST,
         HTTPH_A_ENCODING,
         HTTPH_CL,
-        HTTPH_T_ENCODING
+        HTTPH_T_ENCODING,
+        HTTPH_CT
     };
-    static int count = 4;
+    static int count = 5;
     for(int i=0; i<count; i++){
         if (strncasecmp(
             headerStrs[i], str, strlen(str)
@@ -176,6 +234,29 @@ void addHttpHeader(HttpHeader** first, char* type, char* data){
     memmove((*tmp)->data, data, (*tmp)->length);
 }
 
+int deleteHttpHeader(HttpHeader** first, int type){
+    if (*first == (HttpHeader*) 0)
+        return -1;
+    HttpHeader* tmp = *first;
+    HttpHeader* prior = tmp;
+    if (tmp->type == type){
+        *first = (*first)->next;
+        freeHttpHeader(&prior);
+        return 0;
+    }
+    while(tmp != (HttpHeader*) 0){
+        if (tmp->type == type){
+           prior->next = tmp->next;
+           freeHttpHeader(&tmp);
+           return 0;
+        }
+        prior = tmp;
+        tmp = tmp->next;
+    }
+    return -1;
+}
+
+
 HttpHeader* getHttpHeader(HttpHeader* first, int type){
     HttpHeader* tmp = first;
     while(tmp != (HttpHeader*) 0){
@@ -192,12 +273,18 @@ void freeHttpHeaders(HttpHeader** first){
     while(*tmp != (HttpHeader*)0){
         last = tmp;
         tmp = &((*tmp)->next);
-        if ((*last)->data != (char*) 0)
-            free((*last)->data);
-        if ((*last)->type == HTTPH_UNKNOWN && (*last)->header != (char*) 0)
-            free((*last)->header);
-        free(*last);
-        *last = (HttpHeader*) 0;
+        freeHttpHeader(last);
+    }
+}
+
+void freeHttpHeader(HttpHeader** header){
+    if (*header != (HttpHeader*) 0){
+        if ((*header)->data != (char*) 0)
+            free((*header)->data);
+        if ((*header)->type == HTTPH_UNKNOWN && (*header)->header != (char*) 0)
+            free((*header)->header);
+        free(*header);
+        *header = (HttpHeader*) 0;
     }
 }
 
@@ -266,7 +353,6 @@ int HttpParseStatus(HttpResponse* res, const char* str){
     return total+2+3; // \r + \n, 2-3 spaces
 }
 
-
 void parseURL(const char* url, char** host, char** path, int* port, int* ssl){
 
     int offset = 0;
@@ -307,26 +393,22 @@ void freeURL(char* host, char* path){
 }
 
 void freeHttpRequest(HttpRequest* req){
-    printf("freeing req\n");
     if (req->method != (char*) 0)
         free(req->method);
     if (req->url != (char*) 0)
         free(req->url);
     if (req->protocol != (char*) 0)
         free(req->protocol);
-    printf("freeing req ssl %x\n", req->SSL);
     if (req->SSL != (SSL_Connection*) 0)
         SSL_Close(req->SSL);
     if (req->is_ssl)
         req->path = (char*) 0;
-    printf("freeing req store, url, headers\n");
     freeHttpStore(req->store);
     freeURL(req->host, req->path);
     freeHttpHeaders(&req->header);
 }
 
 void freeHttpResponse(HttpResponse* res){
-    printf("freeing res\n");
     if (res->comment != (char*) 0)
         free(res->comment);
     if (res->protocol != (char*) 0)

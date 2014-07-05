@@ -27,6 +27,9 @@ typedef struct{
     char* headers;      // pointer to start of headers in data
     char* content;      // pointer to start of content in data
     int contentLength;  // how long content is
+    int contentOffset;  // how long content is
+    int contentSpace;   // how long content is
+    int dynamicContent;
     int headerLength;   // how long headers is
 }HttpStore;
 
@@ -39,7 +42,7 @@ typedef struct{
         * path;         // Target path
     int port,           // Target port
         socket,         // Connect file descriptor
-        is_ssl;         // Http/HttpS
+        is_ssl;         // Http/Https
     SSL_Connection* SSL;// SSL Handle attributes
     HttpHeader* header;
     HttpStore* store;
@@ -123,8 +126,30 @@ int HttpRead(void* http);
 ///@param num: the number of bytes to write.
 void HttpWrite(void* http, void* buffer, int num);
 
+// Save data into the content field of the store
+///@param store: the http store to store into
+///@param buf: data to write from
+///@param length: amount of data to write from buf
+void saveHttpContent(HttpStore* store, char* buf, int length);
+
+// Reads a chunk from buffer 
+///@return: the number of bytes read.  Will return -1
+///         if more data needs to be read to read the whole
+///         chunk. Returns 0 if last chunk.
+///@param store: the http store to store the content into
+///@param buf: the buffer to read the chunk from
+int readChunk(HttpStore* store, char* buf);
+
 // Writes the full contents of a http store to stdout
 void dumpStore(HttpStore* http_store);
+
+// Save the HTTP Headers in their own memory.
+void saveHttpHeaders(HttpStore* S);
+
+// Writes the header linked list to a http transaction
+///@param http: a http req/res
+///@param first: the first item in header linked list
+void writeHttpHeaders(void *http, HttpHeader* first);
 
 
 // Print out the headers to stdout of a header 
@@ -149,11 +174,19 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf);
 #define HTTPH_HOST 1            // Host
 #define HTTPH_A_ENCODING 2      // Accept-encoding
 #define HTTPH_UNKNOWN 3         // Other
-#define HTTPH_T_ENCODING 4
+#define HTTPH_T_ENCODING 4      // Transfer Encoding
+#define HTTPH_CT 5              // Content type
 void getHttpHeaderType(HttpHeader* head, char *str);
 
 // Adds a Http header for string representations of a header
 void addHttpHeader(HttpHeader** first, char* type, char* data);
+
+// Removes an HttpHeader from an HttpHeader linked list
+// that matches the given type.
+///@return: 0 if a deletion was made, -1 if no deletion
+///@param first: the first item in the linked list
+///@param type: the type of header to delete
+int deleteHttpHeader(HttpHeader** first, int type);
 
 // get item from linked list
 HttpHeader* getHttpHeader(HttpHeader* first, int type);
@@ -161,6 +194,11 @@ HttpHeader* getHttpHeader(HttpHeader* first, int type);
 // Free a Http linked list structure
 ///@param first: first item in header linked list
 void freeHttpHeaders(HttpHeader** first);
+
+// Frees a HttpHeader from memory.  Does
+// not take linked list into account.
+///@param header: The header object to free.
+void freeHttpHeader(HttpHeader** header);
 
 // Buffer to reuse for reading/writing
 #define HTTP_BUF_SIZE 20000
