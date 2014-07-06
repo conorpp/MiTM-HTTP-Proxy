@@ -121,14 +121,14 @@ void freeHttpStore(HttpStore* S){
 void writeHttpHeaders(void *http, HttpHeader* first){
     HttpHeader* H;
     for(H=first; H != (HttpHeader*)0; H=H->next){
-        switch(H->type){
-            case -1://Http_A_ENCODING:
-                sprintf(HTTP_BUF, "%s: deflate\r\n", H->header);    
-            break;
-            default:
+    //    switch(H->type){
+    //        case -1://Http_A_ENCODING:
+    //            sprintf(HTTP_BUF, "%s: deflate\r\n", H->header);    
+    //        break;
+    //        default:
                 sprintf(HTTP_BUF, "%s: %s\r\n", H->header, H->data);
-            break;
-        }
+    //        break;
+    //    }
         HttpWrite(http, HTTP_BUF, strlen(HTTP_BUF));
         printf("%s", HTTP_BUF);
     }
@@ -204,7 +204,7 @@ void getHttpHeaderType(HttpHeader* head, char *str){
     static int count =6;
     for(int i=0; i<count; i++){
         if (strncasecmp(
-            headerStrs[i], str, strlen(str)
+            headerStrs[i], str, strlen(headerStrs[i])
             )==0){
             head->type = headerTypes[i];
             head->header = headerStrs[i];
