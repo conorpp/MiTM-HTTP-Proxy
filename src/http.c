@@ -190,16 +190,18 @@ void getHttpHeaderType(HttpHeader* head, char *str){
         "Accept-Encoding",
         "Content-length",
         "Transfer-Encoding",
-        "Content-Type"
+        "Content-Type",
+        "Content-encoding"
     };
     static int headerTypes[] = {
         HTTPH_HOST,
         HTTPH_A_ENCODING,
         HTTPH_CL,
         HTTPH_T_ENCODING,
-        HTTPH_CT
+        HTTPH_CT,
+        HTTPH_C_ENCODING
     };
-    static int count = 5;
+    static int count =6;
     for(int i=0; i<count; i++){
         if (strncasecmp(
             headerStrs[i], str, strlen(str)

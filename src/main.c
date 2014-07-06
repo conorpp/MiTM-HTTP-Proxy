@@ -1,7 +1,7 @@
 /*
     Server
 */
-
+#include <zlib.h>
 #include "utils.h"
 #include "tcp.h"
 #include "http.h"
@@ -105,8 +105,6 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 // Req/Res is finished unless there is content.
                 http_store->headerLength += 2;
                 http_store->offset += 2;
-//                write(fileno(stdout), http_store->headers, http_store->headerLength);
-//                printf("---------+\n");
 //                http_store->content = http_store->buf + http_store->offset;
                 HttpHeader* h = getHttpHeader(*header, HTTPH_CL);
                 if (h != (HttpHeader*) 0){
@@ -170,6 +168,43 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
         break;
     }
     return http_store->state;
+}
+
+void decodeGzip(char** gzip, int *length){
+    uLong ucL = 32768;
+    Bytef*buf = malloc(ucL);
+    uLong cL = *length;
+    int ec;
+    z_stream strm; 
+    memset(&strm, 0, sizeof(z_stream));
+    strm.next_in = (Bytef *) *gzip;  
+    strm.avail_in = cL;  
+
+    if (inflateInit2(&strm, (16+MAX_WBITS)) != Z_OK) {  
+        die("inflateInit2 failed");
+    }
+    do{
+        if (strm.total_out >= ucL ) {  
+            buf = realloc(buf, (ucL *= 2));
+            printf("Made more space for decompression %d\n", (int)ucL);
+        }  
+        strm.next_out = buf + strm.total_out;  
+        strm.avail_out = ucL - strm.total_out;  
+
+    }while((ec=inflate(&strm, Z_SYNC_FLUSH)) == Z_OK);
+   
+    switch(ec){
+        case Z_OK: break;
+        case Z_BUF_ERROR: die("Z_BUF_ERROR"); break;
+        case Z_MEM_ERROR: die("Z_MEM_ERROR"); break;
+        case Z_DATA_ERROR: die("Z_DATA_ERROR"); break; 
+    }
+
+    char *tmp = *gzip;
+    *gzip = (char*)buf;
+    if (tmp != (char*) 0)
+        free(tmp);
+    *length = (int)strm.total_out;
 }
 
 int proxyHttp(int clientfd){
@@ -237,7 +272,26 @@ int proxyHttp(int clientfd){
     sprintf(line, "%s %d %s\r\n", res.protocol, res.status, res.comment);
     HttpWrite(&req, line, strlen(line));
     printf("%s", line);
-    // headers
+ 
+    HttpHeader* H = getHttpHeader(res.header, HTTPH_CT);
+    
+    int clearText = 0;
+
+    // Decode gzip to get clear text
+    if (H != (HttpHeader*) 0){
+        // todo: change to indexOf functions
+        if (strncasecmp(H->data, "text/html", 9)==0){
+            H = getHttpHeader(res.header, HTTPH_C_ENCODING);
+            if(H != (HttpHeader*) 0){
+                if (strncasecmp(H->data, "gzip",4) == 0){
+                    decodeGzip(&res.store->content, &res.store->contentLength);
+                    deleteHttpHeader(&res.header, HTTPH_C_ENCODING);
+                    clearText = 1;
+                }
+            }
+        }
+    }
+    
     if (res.store->contentLength){
         char num[12];
         sprintf(num,"%d", res.store->contentLength);
@@ -245,11 +299,12 @@ int proxyHttp(int clientfd){
         deleteHttpHeader(&res.header, HTTPH_T_ENCODING);
         addHttpHeader(&res.header,"Content-length", num);
     }
+    // headers
     writeHttpHeaders(&req, res.header);
- 
     // content
     HttpWrite(&req, res.store->content, res.store->contentLength);
-    
+    if (clearText)
+        write(fileno(stdout), res.store->content, res.store->contentLength);
     done:
     freeHttpRequest(&req);
     freeHttpResponse(&res);

@@ -175,7 +175,8 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf);
 #define HTTPH_A_ENCODING 2      // Accept-encoding
 #define HTTPH_UNKNOWN 3         // Other
 #define HTTPH_T_ENCODING 4      // Transfer Encoding
-#define HTTPH_CT 5              // Content type
+#define HTTPH_C_ENCODING 5      // Content Encoding
+#define HTTPH_CT 6              // Content type
 void getHttpHeaderType(HttpHeader* head, char *str);
 
 // Adds a Http header for string representations of a header

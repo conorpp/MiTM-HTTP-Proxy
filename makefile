@@ -3,7 +3,7 @@
 #Compiling/linking
 CC=clang
 CFLAGS=-c -Wall 
-LFLAGS=-lssl -lcrypto
+LFLAGS=-lssl -lcrypto -lz
 
 #Output executable name
 EXE=proxy
