@@ -1,11 +1,13 @@
 /*
     Server
 */
-#include <zlib.h>
 #include "utils.h"
 #include "tcp.h"
 #include "http.h"
 #include "ssl.h"
+#include "regex.h"
+#include "string.h"
+#include "proxy.h"
 
 int proxyHttp(int clientfd);
 
@@ -22,7 +24,8 @@ int main(int argc, char *argv[]){
     
     // Prepare openSSL for any HttpS connections
     SSL_Init(argv[2], argv[3]);
-    
+    generateRegexes();
+
     sockfd = Listen(NULL, argv[1]);
     
     printf("Proxy listening on %s\n", argv[1]);
@@ -53,160 +56,6 @@ int main(int argc, char *argv[]){
 
     return 0;
 }
-
-int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
-    char* httpbuf = http_store->buf;
-    int l;
-    if (http_store->state == E_connect){
-        http_store->state = E_readHeader;
-    }
-    switch(http_store->state){
-        case E_reReadMethod:
-            printf("--reReading method\n");
-        case E_readMethod:
-        case E_readStatus:
-            //printf("--Reading method\n");
-            if (http_store->state == E_readStatus)
-                http_store->offset = HttpParseStatus((HttpResponse*)http, httpbuf);
-            else
-                http_store->offset = HttpParseMethod((HttpRequest*)http, httpbuf);
-            
-            http_store->headers = httpbuf + http_store->offset;
-            //printf("--header start is ::\n");\
-
-            //write(fileno(stdout), http_store->headers, 50);
-            //HttpRequest* req = (HttpRequest*) http;
-            //printf("reading method. %s %s %s\n",
-            //        req->method, req->path, req->protocol);
-            if (http_store->state == E_readMethod)
-                return (http_store->state = E_connect);
-            else
-                return (http_store->state = E_readHeader);
-                
-        break;
-        case E_readMoreHeader:
-            http_store->state = E_readHeader;
-        case E_readHeader:
-            httpbuf = http_store->buf + http_store->offset;
-            http_store->headerLength = 0; 
-            // Parse all available headers.
-            while((l = HttpParseHeader(header, httpbuf)) > 0){
-                if (http_store->offset > http_store->length){
-                    printf("--EXCEEDING STORE SIZE %d\n", http_store->length);
-                    exit(0);
-                }
-                http_store->offset += l;
-                http_store->headerLength += l;
-                httpbuf = http_store->buf + http_store->offset;
-
-            }
-            //printHttpHeaders(header);
-            if (l == 0){
-                // Req/Res is finished unless there is content.
-                http_store->headerLength += 2;
-                http_store->offset += 2;
-//                http_store->content = http_store->buf + http_store->offset;
-                HttpHeader* h = getHttpHeader(*header, HTTPH_CL);
-                if (h != (HttpHeader*) 0){
-                    http_store->contentLength = atol(h->data);
-                    http_store->state = http_store->contentLength ? E_readContent : E_finished;
-
-                }else if((h = getHttpHeader(*header, HTTPH_T_ENCODING)) != (HttpHeader*) 0){
-                    if (strncasecmp(h->data, "chunked", 7) == 0){
-                        http_store->state = E_readChunks;
-                    }else
-                        http_store->state = E_finished;
-                }else
-                    http_store->state = E_finished;
-                
-                saveHttpHeaders(http_store);
-
-                break;
-            }else{
-                // Still waiting for headers.
-                printf("---Reading more of header\n");
-                http_store->state = E_readMoreHeader;  
-            }
-        break;
-        case E_continue:
-            http_store->state = E_readContent;
-        case E_readContent:
-
-            while( (l = http_store->length - http_store->offset) < 0 )
-                http_store->offset -= l;
-            
-            printf("reading content %d / %d\n",
-                http_store->length - http_store->offset, 
-                http_store->contentLength );
-            // Check if the content length has been met.
-            if (http_store->length - http_store->offset >= http_store->contentLength){
-                saveHttpContent(http_store, http_store->buf + http_store->offset,
-                                                    http_store->contentLength);
-                http_store->state = E_finished;
-            }else{
-            //    printf("--E_readContent-continue\n");
-                http_store->state = E_continue;
-            }
-        break;
-        case E_readMoreChunks:
-            http_store->state = E_readChunks;
-        case E_readChunks:
-            httpbuf = http_store->buf+http_store->offset;
-            while( (l=readChunk(http_store, httpbuf)) > 0 ){
-                http_store->offset += l;
-                httpbuf += l;
-                printf("got %d chunks\n",l);
-            }
-
-            if (l == 0){
-                http_store->state = E_finished;
-            }
-            else{
-                printf("---need to read more chunks");
-                http_store->state = E_readMoreChunks;
-            }
-        break;
-    }
-    return http_store->state;
-}
-
-void decodeGzip(char** gzip, int *length){
-    uLong ucL = 32768;
-    Bytef*buf = malloc(ucL);
-    uLong cL = *length;
-    int ec;
-    z_stream strm; 
-    memset(&strm, 0, sizeof(z_stream));
-    strm.next_in = (Bytef *) *gzip;  
-    strm.avail_in = cL;  
-
-    if (inflateInit2(&strm, (16+MAX_WBITS)) != Z_OK) {  
-        die("inflateInit2 failed");
-    }
-    do{
-        if (strm.total_out >= ucL ) {  
-            buf = realloc(buf, (ucL *= 2));
-            printf("Made more space for decompression %d\n", (int)ucL);
-        }  
-        strm.next_out = buf + strm.total_out;  
-        strm.avail_out = ucL - strm.total_out;  
-
-    }while((ec=inflate(&strm, Z_SYNC_FLUSH)) == Z_OK);
-   
-    switch(ec){
-        case Z_OK: break;
-        case Z_BUF_ERROR: die("Z_BUF_ERROR"); break;
-        case Z_MEM_ERROR: die("Z_MEM_ERROR"); break;
-        case Z_DATA_ERROR: die("Z_DATA_ERROR"); break; 
-    }
-
-    char *tmp = *gzip;
-    *gzip = (char*)buf;
-    if (tmp != (char*) 0)
-        free(tmp);
-    *length = (int)strm.total_out;
-}
-
 int proxyHttp(int clientfd){
     int s, serverfd;
     HttpRequest req;
@@ -242,8 +91,7 @@ int proxyHttp(int clientfd){
     }
     printf("\n-%%- Request(%d) -%%-\n", clientfd) ;
     
-    // Write the request
-    
+    // Write the request 
     sprintf(line, "%s %s %s\r\n", req.method, req.path, req.protocol);
     write(fileno(stdout), line, strlen(line));
     HttpWrite(&res, line, strlen(line));
@@ -274,8 +122,6 @@ int proxyHttp(int clientfd){
     printf("%s", line);
  
     HttpHeader* H = getHttpHeader(res.header, HTTPH_CT);
-    
-    int clearText = 0;
 
     // Decode gzip to get clear text
     if (H != (HttpHeader*) 0){
@@ -284,10 +130,16 @@ int proxyHttp(int clientfd){
             H = getHttpHeader(res.header, HTTPH_C_ENCODING);
             if(H != (HttpHeader*) 0){
                 if (strncasecmp(H->data, "gzip",4) == 0){
-                    decodeGzip(&res.store->content, &res.store->contentLength);
+                /*    decodeGzip(&res.store->content, &res.store->contentLength);
                     deleteHttpHeader(&res.header, HTTPH_C_ENCODING);
-                    clearText = 1;
-                }
+                    char *tmp = res.store->content;
+                    res.store->content = replaceAll(findLink, res.store->content,
+                            res.store->contentLength, &res.store->contentLength,
+                            "http://youtu.be/dQw4w9WgXcQ"
+                        );
+                    
+                    if (tmp != (char*)0)free(tmp);
+                */}
             }
         }
     }
@@ -303,8 +155,8 @@ int proxyHttp(int clientfd){
     writeHttpHeaders(&req, res.header);
     // content
     HttpWrite(&req, res.store->content, res.store->contentLength);
-    if (clearText)
-        write(fileno(stdout), res.store->content, res.store->contentLength);
+    //if (clearText)
+    //    write(fileno(stdout), res.store->content, res.store->contentLength);
     done:
     freeHttpRequest(&req);
     freeHttpResponse(&res);

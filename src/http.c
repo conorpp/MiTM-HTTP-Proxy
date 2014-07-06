@@ -423,5 +423,132 @@ void freeHttpResponse(HttpResponse* res){
 }
 
 
+int parseHttpHeaders(HttpHeader** header, HttpStore* http_store){
+    char* httpbuf = http_store->buf + http_store->offset;
+    int l = 0;
+    http_store->headerLength = 0; 
+    // Parse all available headers.
+    while((l = HttpParseHeader(header, httpbuf)) > 0){
+        if (http_store->offset > http_store->length){
+            printf("--EXCEEDING STORE SIZE %d\n", http_store->length);
+            exit(0);
+        }
+        http_store->offset += l;
+        http_store->headerLength += l;
+        httpbuf +=l;
+    }
 
+    return l;
+}
 
+#define HTTP_CONTENT 1
+#define HTTP_CHUNKED 2
+#define HTTP_NO_CONTENT 3
+int getHttpContent(HttpHeader* header, int* contentLength){
+    HttpHeader* h = getHttpHeader(header, HTTPH_CL);
+    if (h != (HttpHeader*) 0){
+        *contentLength = atol(h->data);
+        return (*contentLength ? HTTP_CONTENT : HTTP_NO_CONTENT);
+    }else if((h = getHttpHeader(header, HTTPH_T_ENCODING)) != (HttpHeader*) 0){
+        if (strncasecmp(h->data, "chunked", 7) == 0){
+            return HTTP_CHUNKED;
+        }
+    }
+    return HTTP_NO_CONTENT;
+}
+int parseHttpContent(HttpStore* http_store){
+    int l;
+    // trim offset if necessary
+    while( (l = http_store->length - http_store->offset) < 0 )
+        http_store->offset -= l;
+
+    printf("reading content %d / %d\n",
+            http_store->length - http_store->offset, 
+            http_store->contentLength );
+    // Check if the content length has been met.
+    if (http_store->length - http_store->offset >= http_store->contentLength){
+        saveHttpContent(http_store, http_store->buf + http_store->offset,
+                http_store->contentLength);
+        return 0;
+    }else{
+        return 1;
+    }
+}
+
+int parseHttpChunks(HttpStore* http_store){
+    char* httpbuf = http_store->buf+http_store->offset;
+    int l;
+    while( (l=readChunk(http_store, httpbuf)) > 0 ){
+        http_store->offset += l;
+        httpbuf += l;
+        printf("got %d chunks\n",l);
+    }
+    return l;    
+}
+
+int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
+    char* httpbuf = http_store->buf;
+    if (http_store->state == E_connect){
+        http_store->state = E_readHeader;
+    }
+    switch(http_store->state){
+        // Read the first line of Http req/res for http/https
+        case E_reReadMethod:
+        case E_readMethod:
+        case E_readStatus:
+            if (http_store->state == E_readStatus)
+                http_store->offset = 
+                    HttpParseStatus((HttpResponse*)http, httpbuf);
+            else
+                http_store->offset = 
+                    HttpParseMethod((HttpRequest*)http, httpbuf);
+            
+            http_store->headers = httpbuf + http_store->offset;
+            if (http_store->state == E_readMethod)
+                return (http_store->state = E_connect);
+            else
+                return (http_store->state = E_readHeader);
+        break;
+        // Read in the headers
+        case E_readMoreHeader:
+        case E_readHeader:
+            if ( parseHttpHeaders(header, http_store) == 0){
+                http_store->headerLength += 2;  // Empty line
+                http_store->offset += 2;        // Empty line
+                switch(getHttpContent(*header, &http_store->contentLength)){
+                    case HTTP_CONTENT: http_store->state = E_readContent;
+                    break;
+                    case HTTP_CHUNKED: http_store->state = E_readChunks;
+                    break;
+                    default: http_store->state = E_finished; break;
+                }
+                break;
+            }else{
+                // Not all the headers are present?
+                printf("---Reading more of header\n");
+                http_store->state = E_readMoreHeader;  
+            }
+        break;
+        // Read in the content if its not chunked
+        case E_continue:
+        case E_readContent:
+            
+            if ( parseHttpContent(http_store) == 0)
+                http_store->state = E_finished;
+            else    // More data must be read in.
+                http_store->state = E_continue;
+        
+        break;
+        // Read in chunked content.
+        case E_readMoreChunks: 
+        case E_readChunks:
+            if (parseHttpChunks(http_store) == 0)
+                http_store->state = E_finished;
+            else{   // More data must be read in
+                http_store->state = E_readMoreChunks;
+                printf("---need to read more chunks");
+            }
+        break;
+    }
+    return http_store->state;
+}

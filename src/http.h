@@ -240,5 +240,27 @@ void freeHttpRequest(HttpRequest* req);
 ///@param res: pointer to struct to free.
 void freeHttpResponse(HttpResponse* res);
 
+/* The rest of these functions are subroutines
+* */
+
+// Parse all the headers out of an http store
+int parseHttpHeaders(HttpHeader** header, HttpStore* http_store);
+
+// get the content type from a http header
+///@param contentLength: will fill in with content length
+///                     if it's there
+#define HTTP_CONTENT 1
+#define HTTP_CHUNKED 2
+#define HTTP_NO_CONTENT 3
+int getHttpContent(HttpHeader* header, int* contentLength);
+
+// Parse none chunked content
+int parseHttpContent(HttpStore* http_store);
+
+// parse chunked content
+int parseHttpChunks(HttpStore* http_store);
+
+// The main state machine for the http proxy lifecycle.
+int HttpParse(void* http, HttpHeader** header, HttpStore *http_store);
 
 #endif

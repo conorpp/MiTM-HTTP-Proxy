@@ -9,7 +9,7 @@ LFLAGS=-lssl -lcrypto -lz
 EXE=proxy
 
 #Obj files, build location
-OBJS=utils.o tcp.o http.o main.o ssl.o reader.o
+OBJS=utils.o tcp.o http.o main.o ssl.o reader.o string.o regex.o proxy.o
 OBJ_DIR=build
 OBJS_OUTPUT=$(addprefix $(OBJ_DIR)/,$(OBJS))
 
