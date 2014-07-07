@@ -38,7 +38,7 @@ $(EXE): clean main run
 $(EXE)D: debug $(EXE)
 
 debug:
-	CC="$(CC) -D NOFORK"
+	$(eval CFLAGS += -DNOFORK=1)
 
 #run: proxy
 #    ./proxy 9999 cert.pem privkey.pem
