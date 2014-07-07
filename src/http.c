@@ -97,7 +97,6 @@ HttpStore* newHttpStore(int flags){
         S->state = E_reReadMethod;
     else if (IS_HTTP_RES(flags))
         S->state = E_readStatus;
-    S->headers = buffer;
     S->content = malloc(STORE_SIZE);
     S->size = STORE_SIZE;
     S->contentSpace = STORE_SIZE;
@@ -110,8 +109,6 @@ void freeHttpStore(HttpStore* S){
     if (S != (HttpStore*) 0){
         if (S->buf != (char*) 0)
             free(S->buf);
-        if (S->headerLength && S->headers != (char*) 0)
-            free(S->headers);
         if (S->dynamicContent && S->content != (char*) 0)
             free(S->content);
         free(S);
@@ -147,14 +144,14 @@ void printHttpHeaders(HttpHeader **header){
     }
     printf("\n");
 }
-
+/*
 void saveHttpHeaders(HttpStore* S){
     if (S->headerLength){
         char* tmp = S->headers;
         S->headers = malloc(S->headerLength);
         memmove(S->headers, tmp, S->headerLength);
     }
-}
+}*/
 
 int HttpParseHeader(HttpHeader** header, char* httpbuf){
     static char headertype[100], data[10000];
@@ -395,6 +392,7 @@ void freeURL(char* host, char* path){
 }
 
 void freeHttpRequest(HttpRequest* req){
+    
     if (req->method != (char*) 0)
         free(req->method);
     if (req->url != (char*) 0)
@@ -405,6 +403,7 @@ void freeHttpRequest(HttpRequest* req){
         SSL_Close(req->SSL);
     if (req->is_ssl)
         req->path = (char*) 0;
+
     freeHttpStore(req->store);
     freeURL(req->host, req->path);
     freeHttpHeaders(&req->header);
@@ -503,7 +502,7 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 http_store->offset = 
                     HttpParseMethod((HttpRequest*)http, httpbuf);
             
-            http_store->headers = httpbuf + http_store->offset;
+            //http_store->headers = httpbuf + http_store->offset;
             if (http_store->state == E_readMethod)
                 return (http_store->state = E_connect);
             else

@@ -24,6 +24,8 @@ struct __TAGS__{
      Regex* a,
           * link,
           * iframe,
+          * body,
+          * head,
           * script;
 } HTML_TAGS;
 
@@ -44,6 +46,7 @@ void freeRegex(Regex* r);
 void freeRegexes();
 
 int findLink(const char* string, Range* r);
-
+int findBodyEnd(const char * string, Range* r);
+int findHeadEnd(const char * string, Range* r);
 
 #endif

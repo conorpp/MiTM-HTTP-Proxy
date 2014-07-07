@@ -7,7 +7,7 @@ int matchRegex (const char* string, Range* range, Regex* reg)
     //printf("--searching %s...\n",string);
     int nomatch = regexec (&reg->r, string, 1, m, 0);
     if (nomatch) {
-        //printf ("No more matches.\n");
+        printf ("No more matches.\n");
         return nomatch;
     }
     range->start = m[0].rm_so;
@@ -42,7 +42,9 @@ void generateRegexes(){
     HTML_TAGS.a = compileRegex("(<a)[^>]+");
     HTML_TAGS.link = compileRegex("<link[^>]+");
     HTML_TAGS.iframe = compileRegex("<iframe[^>]+");
-    HTML_TAGS.script = compileRegex("<script[^>]");
+    HTML_TAGS.script = compileRegex("<script[^>]+");
+    HTML_TAGS.body = compileRegex("((<body)((.|\s)*)(</body>))");
+    HTML_TAGS.head = compileRegex("((</head>))");
 
     HTML_ATTR.href = compileRegex("href=\"[^\"]+");
     HTML_ATTR.src = compileRegex("src=\"[^\"]+");
@@ -51,7 +53,7 @@ void generateRegexes(){
 void freeRegexes(){
     int ptr_size = sizeof(Regex*);
     int size = (sizeof(struct __TAGS__))/ptr_size;
-
+    printf("---freeing regexes\n");
     for (int i=0; i < size; i++)
         freeRegex( (Regex*)((( PTR_SIZE *)&HTML_TAGS)[i]));
     
@@ -59,8 +61,26 @@ void freeRegexes(){
     
     for (int i=0; i < size; i++)
         freeRegex( (Regex*)((( PTR_SIZE *)&HTML_ATTR)[i]));
+    printf("---freed regexes");
 }
 
+
+int findBodyEnd(const char * string, Range* r){
+    if (matchRegex(string, r, HTML_TAGS.body) != 0)
+       return 1;
+    r->start = (r->end -= 7);// strlen(</body>)
+    printf("found boday @ %d:%d\n%s", r->start, r->end,string);
+    return 0;
+}
+
+int findHeadEnd(const char * string, Range* r){
+    if (matchRegex(string, r, HTML_TAGS.head) != 0){
+       return 1;
+    }
+    r->start = (r->end -= 7);// strlen(</head>)
+    //printf("found match\n");
+    return 0;
+}
 
 int findLink(const char* string, Range* r){
     static Range firstRun;
@@ -78,19 +98,25 @@ int main(int argc, char ** argv)
     const char * regex_text;
     char * find_text;
     if (argc < 2) {
-        printf("you forget text");
+        printf("you forget text\n");
         exit(1);
     }
     else{
         find_text = argv[1];
     }
     generateRegexes();
-    
+    char *html = "<html><head><title>hi</title></head><body><h1>hello</h1></body></html>\n";
     char* inject = "href=\"http://it worked\"";
     int newlength;
-    char* newstring = replaceAll(findLink, find_text, strlen(find_text), &newlength, inject);
-    printf("after replacement: %s\n", newstring);
-    printf("new length: %d, strlen: %d\n", newlength, (int)strlen(newstring));
+    Range r;
+    findBodyEnd(html, &r);
+    char* files[] = {"../gravityscript.html", "../script2.html"};
+    char *result=insertFiles(findBodyEnd,
+        html, strlen(html), &newlength,files, 1 );
+    printf("result: %s\n", result);
+    //char* newstring = replaceAll(findLink, find_text, strlen(find_text), &newlength, inject);
+    //printf("after replacement: %s\n", newstring);
+    //printf("new length: %d, strlen: %d\n", newlength, (int)strlen(newstring));
     freeRegexes();
 
     return 0;

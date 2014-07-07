@@ -16,6 +16,8 @@ char* replace(char* string, int len, char* substr, int sublen, Range* r, int* ne
 char* replaceAll(int (*regFunc)(const char*, Range*), char * string, int length, int* newlength, char* substr);
 
 
+char* insertFiles(int (*regFunc)(const char*, Range*),
+        char * string, int length, int* newlength, char* files[], int filenum);
 
 
 #endif

@@ -24,7 +24,6 @@ typedef struct{
     int length;         // length of stored data
     int offset;         // length of data that's been processed
     int state;          // the state of the transaction
-    char* headers;      // pointer to start of headers in data
     char* content;      // pointer to start of content in data
     int contentLength;  // how long content is
     int contentOffset;  // how long content is
@@ -130,7 +129,7 @@ void HttpWrite(void* http, void* buffer, int num);
 ///@param store: the http store to store into
 ///@param buf: data to write from
 ///@param length: amount of data to write from buf
-void saveHttpContent(HttpStore* store, char* buf, int length);
+//void saveHttpContent(HttpStore* store, char* buf, int length);
 
 // Reads a chunk from buffer 
 ///@return: the number of bytes read.  Will return -1

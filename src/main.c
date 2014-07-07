@@ -9,8 +9,20 @@
 #include "string.h"
 #include "proxy.h"
 
-int proxyHttp(int clientfd);
+int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*));
+int editPage(HttpResponse* res);
 
+void Help(){
+    char * lines[] = {
+        "--%%-- Prox --%%--",
+        "usage: ./prox [options] <target-host>",
+        "Options:"
+        "-r:"
+        "\0"  
+    };
+    for(int i=0; lines[i][0]; i++ )
+        printf("%s\n", lines[i]);
+}
 
 int main(int argc, char *argv[]){
     
@@ -29,7 +41,9 @@ int main(int argc, char *argv[]){
     sockfd = Listen(NULL, argv[1]);
     
     printf("Proxy listening on %s\n", argv[1]);
-        
+#ifdef NOFORK
+    printf("NOFORK\n");
+#endif
     while(1){
        
         //TODO make a header/helper function for this
@@ -42,21 +56,41 @@ int main(int argc, char *argv[]){
 #ifndef NOFORK
         if (fork() == 0){       //   parent
             close(sockfd);
-            proxyHttp(newfd);
+            proxyHttp(newfd, editPage);
             close(newfd);
             exit(0);
         }else{                  //   parent
             close(newfd);
         }
 #else
-        proxyHttp(newfd);
+        proxyHttp(newfd, editPage);
         close(newfd);
 #endif
     }
 
     return 0;
 }
-int proxyHttp(int clientfd){
+
+
+int editPage(HttpResponse* res){
+    char *tmp = res->store->content;
+    
+    // Replace all links
+    res->store->content = replaceAll(findLink, res->store->content,
+            res->store->contentLength, &res->store->contentLength,
+            "http://youtu.be/dQw4w9WgXcQ");
+    if (tmp != (char*)0 && tmp != res->store->content)free(tmp);
+    char *files[] = {"gravityscript.html"};
+    tmp = res->store->content;
+    res->store->content = insertFiles(findHeadEnd, 
+        res->store->content, res->store->contentLength, 
+        &res->store->contentLength, files, 1);
+    if (tmp != (char*)0 && tmp != res->store->content) free(tmp);
+    // Add files
+    return 0;
+}
+
+int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     int s, serverfd;
     HttpRequest req;
     HttpResponse res;
@@ -126,21 +160,15 @@ int proxyHttp(int clientfd){
     // Decode gzip to get clear text
     if (H != (HttpHeader*) 0){
         // todo: change to indexOf functions
-        if (strncasecmp(H->data, "text/html", 9)==0){
+        if (strstr(H->data, "text/html")!= (char*)0){
             H = getHttpHeader(res.header, HTTPH_C_ENCODING);
             if(H != (HttpHeader*) 0){
-                if (strncasecmp(H->data, "gzip",4) == 0){
-                /*    decodeGzip(&res.store->content, &res.store->contentLength);
+                if (strstr(H->data, "gzip") != (char*)0){
+                    decodeGzip(&res.store->content, &res.store->contentLength);
                     deleteHttpHeader(&res.header, HTTPH_C_ENCODING);
-                    char *tmp = res.store->content;
-                    res.store->content = replaceAll(findLink, res.store->content,
-                            res.store->contentLength, &res.store->contentLength,
-                            "http://youtu.be/dQw4w9WgXcQ"
-                        );
-                    
-                    if (tmp != (char*)0)free(tmp);
-                */}
+                }
             }
+            editCallback(&res);
         }
     }
     

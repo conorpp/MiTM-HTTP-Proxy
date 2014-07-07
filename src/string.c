@@ -1,5 +1,6 @@
 
 #include "string.h"
+#include "utils.h"
 
 
 char* replace(char* string, int len, char* substr, int sublen, 
@@ -47,8 +48,54 @@ char* replaceAll(int (*regFunc)(const char*, Range*),
         if (tmp != (char*)0)
             free(tmp);
     }
-
     return replaced;
 }
+
+char* insertFiles(int (*regFunc)(const char*, Range*),
+        char * string, int length, int* newlength, char* files[], int filenum){
+    char *strbuf;
+    Range range;
+    memset(&range, 0, sizeof(Range));
+    
+    //char* replaced;// = malloc(length+1);
+    //memmove(replaced, string, length+1);
+
+    *newlength = length;
+    char* orig = string;
+    char* tmp;
+    
+    if ( regFunc(string, &range) != 0) 
+        return string;
+    for (int i=0; i<filenum; i++){
+        
+        tmp = string;
+        FILE* f = fopen(files[i], "r");
+        if (f == (FILE*)0){
+            printf("could not open file %s", files[i]);
+            exit(2);
+        }
+        
+        // obtain file size:
+        fseek (f , 0 , SEEK_END);
+        long int size = ftell (f);
+        rewind (f);
+        
+        strbuf = malloc(size);
+        int r = fread (strbuf,1,size,f);
+        if (r != size)
+            die("file was read incorrectly\n");
+        string = replace(string, *newlength, strbuf, size, &range, newlength);
+        range.start += size;
+        range.end += size;
+        
+        if (tmp != (char*) 0 && tmp != orig)
+            free(tmp);
+    }
+    return string;
+ 
+}
+
+
+
 
 
