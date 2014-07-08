@@ -26,7 +26,7 @@ void SSLWrap(void *http, int flags);
 //Load libraries for SSL and init globals.
 ///@param certFile: the RSA signed CA file.
 ///@param privKeyFile: the private key for CA file.
-void SSL_Init(char *certFile, char* privKeyFile);
+void SSL_Init(char* certFile, char* privKeyFile);
     
 //Takes a already connected TCP file descriptor
 //and wraps it in SSL.  For starting SSL

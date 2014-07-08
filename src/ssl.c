@@ -17,7 +17,8 @@ void SSL_Init(char *certFile, char* privKeyFile){
                                 SSL_FILETYPE_PEM);
       
     if ( !SSL_CTX_check_private_key(SSL_SERVER_HANDLE)){
-        printf("Private key and CA don\'t match up\n");
+        printf("Private key %s and CA %s don\'t match up\n",
+                            privKeyFile, certFile);
         exit(2);
     }
 }
