@@ -76,3 +76,19 @@ int Connect(char *hostname, int _port){
 }
 
 
+int hostIsAlive(char* host){
+    struct addrinfo hints, *info;
+    int gai_result;
+
+    memset(&hints, 0, sizeof hints);
+    hints.ai_family = AF_UNSPEC; /*either IPV4 or IPV6*/
+    hints.ai_socktype = SOCK_STREAM;
+    hints.ai_flags = AI_CANONNAME;
+    int ret = 0;
+    if ((gai_result = getaddrinfo(host, "http", &hints, &info)) != 0) {
+        ret = gai_result;
+    }
+    freeaddrinfo(info);
+    return ret;
+}
+

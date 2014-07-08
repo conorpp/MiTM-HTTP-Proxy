@@ -27,5 +27,9 @@ int Listen(void *addr, char *port);
 // returns the file descriptor
 int Connect(char *hostname, int port);
 
+/// @return 0 if the host is visible.
+/// Returns a gai_error otherwise.
+int hostIsAlive(char* host);
+
 
 #endif
