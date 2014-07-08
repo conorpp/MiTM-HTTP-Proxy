@@ -7,27 +7,17 @@
 #include "ssl.h"
 #include "regex.h"
 #include "string.h"
+#include "commandline.h"
 #include "proxy.h"
 
 int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*));
 int editPage(HttpResponse* res);
 
-void Help(){
-    char * lines[] = {
-        "--%%-- Prox --%%--",
-        "usage: ./prox [options] <target-host>",
-        "Options:"
-        "-r:"
-        "\0"  
-    };
-    for(int i=0; lines[i][0]; i++ )
-        printf("%s\n", lines[i]);
-}
-
 int main(int argc, char *argv[]){
     
-    if (argc<4){
-        die("you forgot port , cert , privkey\n");
+    if (argc<2){
+        Help();
+        exit(1);
     }
 
     struct sockaddr_storage their_addr;
@@ -35,12 +25,13 @@ int main(int argc, char *argv[]){
     int sockfd, newfd;
     
     // Prepare openSSL for any HttpS connections
-    SSL_Init(argv[2], argv[3]);
+    setProxSettings(argc, argv);
+    SSL_Init(Prox.ssl.certfile, Prox.ssl.privfile);
     generateRegexes();
 
-    sockfd = Listen(NULL, argv[1]);
+    sockfd = Listen(NULL, Prox.port);
     
-    printf("Proxy listening on %s\n", argv[1]);
+    printf("Proxy listening on %s\n", Prox.port);
 #ifdef NOFORK
     printf("NOFORK\n");
 #endif

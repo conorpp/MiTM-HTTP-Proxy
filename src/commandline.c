@@ -1,21 +1,28 @@
 #include "commandline.h"
 
-
 void Help(){
     char * lines[] = {
         "  --%-- Prox --%--",
         "Usage: ./prox [options] [<string|files>] <target-host>",
         "    target-host: the IP address or domain name of the computer to MiTM attack.",
         "Options:",
+        "   -p <port>: Port to listen on.",
         "   -r <regex>: POSIX regular expression to use for matching",
         "   -after: indicate to insert string or files after match",
         "   -before: indicate to insert string or files before match (default)",
         "   -replace: indicate to replace match with string or files",
+        "   -c <number>: limit the number of times to match and insert. Defaults to inserting after every match.",
         "   -string <string>: pass in a string to insert. ",
         "   -files <file1 file2 ...>: pass in files to insert.",
+        "   -matchtag <HTML tag>: Use a built in regex to match an entire HTML tag\n\
+                e.g. -matchtag h1 ",
+        "   -matchattr <HTML tag>: Use a built in regex to match an entire HTML attribute and it's value\n\
+                e.g. -matchattr href ",
         "   --save-client-data <file>: save data sent by client to file.",
         "   --save-server-data <file>: save data sent by server to file.",
         "   -h: include HTTP headers when saving data.",
+        "   -cert <CA file>: Provide a signed central authority certificate to use for MiTM SSL.",
+        "   -priv <PK file>: Provide a private key file for the signed CA file.",
         "",
         "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
         "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
@@ -24,33 +31,7 @@ void Help(){
     for(int i=0; lines[i][0]; i++ )
         printf("%s\n", lines[i]);
 }
-static char* CL_ARGS[] = {
-    "-r",
-    "-after",
-    "-before",
-    "-replace",
-    "-string",
-    "-files",
-    "--save-client-data",
-    "--save-server-data",
-    "-h",
-    "-gravity",
-    "-rickroll",
-    "\0"
-};
 
-#define CL_REGEX 1
-#define CL_AFTER 2
-#define CL_BEFORE 3
-#define CL_REPLACE 4
-#define CL_STRING 5
-#define CL_FILES 6
-#define CL_SAVE_CLIENT 7
-#define CL_SAVE_SERVER 8
-#define CL_SAVE_HEADERS 9
-#define CL_GRAVITY 10
-#define CL_RICKROLL 11
-#define CL_NOTHING 99
 int parseArgs(int _argc, char* argv[], int* cur){
     static int arg = 0;
     if (arg >= _argc)
@@ -58,14 +39,19 @@ int parseArgs(int _argc, char* argv[], int* cur){
     for(int i=0; CL_ARGS[i][0]; i++){
         if (strncasecmp(argv[arg], CL_ARGS[i], strlen(CL_ARGS[i])) == 0){
             *cur=arg++;
-            return (i+1);
-        }
+            return CL_VAL(i+1);
+        } 
     }
+    if(argv[arg][0] == '-'){
+        fprintf(stderr, "error: unknown option %s\n", argv[arg]);
+        die("");
+    }
+
     *cur = arg++;
     return CL_NOTHING;
 }
 
-int isArg(char* str){
+static int isArg(char* str){
     for(int i=0; CL_ARGS[i][0]; i++){
         if (strncasecmp(str, CL_ARGS[i], strlen(CL_ARGS[i])) == 0){
             return 1;
@@ -74,103 +60,179 @@ int isArg(char* str){
     return 0;
 }
 
-int main(int argc, char* argv[]){
-
-    if (argc<2){
-        Help();
-        exit(1);
+static void check(int arg, int argc, char *msg){
+    if (arg+1 >= argc)
+        die(msg);
+}
+static void checkFile(char* filename){
+    FILE* f;
+    if ( (f=fopen(filename, "r")) == (FILE*) 0){
+        printf("Could not open %s\n", filename);
+        die("");
     }
+    fclose(f);
+
+}
+void setProxSettings(int argc, char* argv[]){
+
+    static char* files[MAX_FILES];
+    memset(&Prox, 0, sizeof(struct __SETTINGS__));
+    Prox.options.position = CL_BEFORE;
+    Prox.files = files;
+    Prox.ssl.enabled++;
+    Prox.ssl.certfile = "localhost.pem";
+    Prox.ssl.privfile = "privkey.pem";
+    Prox.port = "9999";
     int o, cur;
-    int claimData = 0;
-    int pos = CL_BEFORE;
-    char** files = (char**)0;
-    int filenum = 0;
-    char* str = (char*) 0;
-    char* regex = (char*) 0;
-    char* target = (char*) 0;
-    int flags = 0;
+    int claimData = 1;
     while( (o=parseArgs(argc, argv, &cur)) != -1){
         switch(o){
             case CL_REGEX:
                 claimData = 1;
-                if (cur+1 < argc)
-                    regex = argv[cur+1]; 
-                else
-                    die("You must provide a POSIX regex after -r");
+                check(cur,argc,"Expecting a POSIX regex");
+                Prox.regexString = argv[cur+1]; 
+                Prox.regex = compileRegex(Prox.regexString);
                 break;
             case CL_AFTER:
             case CL_BEFORE:
             case CL_REPLACE:
-                pos = o;
+                Prox.options.position = o;
             break;
             case CL_STRING:
                 claimData = 1;
-                if (cur + 1 >= argc)
-                    die("You need to provide a string");
+                check(cur,argc,"Expecting a string");
                 
-                if (files == (char**)0)
-                    str = argv[cur+1];
+                if (Prox.filenum == 0)
+                    Prox.replaceString = argv[cur+1];
                 else
                     die("You can't specify a string to insert and files");
             break;
             case CL_FILES:
                 printf("files\n");
-                claimData = 1;
-                if (cur + 1 >= argc)
-                    die("You must provide atleat one file name");
-                char* pch = strtok (argv[cur+1]," ,");
-                int offset = 0;
-                while(pch != (char*) 0){
-                    filenum++;
-                    char* file = pch;
-                    FILE* f;
-                    if ( (f=fopen(file, "r")) == (FILE*) 0){
-                        printf("Could not open %s\n", file);
-                        die("");
+                check(cur,argc,"Expecting atleat one file name");
+                while((cur+1<argc) && !isArg(argv[++cur])){
+                    char* file = strtok (argv[cur]," ,");
+                    claimData++;
+                    while(file != (char*) 0){
+                        if (++Prox.filenum >= MAX_FILES)
+                            die("maximum file amount exceeded.");
+                        checkFile(file);
+                        *(files+Prox.filenum-1) = file;
+                        file = strtok((char*)0, " ,");
                     }
-                    fclose(f);
-                    printf("adding file\n");
-                    int size = sizeof(char)*strlen(file) + 1;
-                    if (filenum == 1){
-                        char *newfile = malloc(size);
-                        memmove(newfile, file, size);
-                        files = &newfile;
-                    }else{
-                        char *newfile = realloc(*files, size+offset);
-                        memmove(newfile+offset, file, size);
-                        files = &newfile;
-                    }
-                    offset += size; 
-                    pch = strtok((char*)0, " ,");
                 }
-                if (filenum == 0)
+                if (Prox.filenum == 0)
                     die("Could not find specified file");
             break;
+            case CL_PORT:
+                check(cur,argc,"Expecting port number.");
+                int port = atoi(argv[cur+1]);
+                if (port < 0 || port > 1<<15){
+                    fprintf(stderr, "Invalid port number %d\n",port);
+                    die("");
+                }
+                Prox.port = argv[cur+1];
+            break;
+            case CL_CERT_FILE:
+                printf("cert file\n");
+                claimData=1;
+                check(cur,argc,"Expecting signed central authority certificate filename.");
+                printf("checking cert file %s\n", argv[cur+1]);
+                checkFile(argv[cur+1]);
+                Prox.ssl.certfile = argv[cur+1];
+            break;
+            case CL_PRIV_FILE:
+                claimData=1;
+                check(cur,argc,"Expecting private key filename.");
+                checkFile(argv[cur+1]);
+                Prox.ssl.privfile = argv[cur+1];
+            break;
+            case CL_TAG:
+                claimData=1;
+                check(cur,argc,"Expecting HTML tag.");
+                Prox.regexString = argv[cur+1];
+                Prox.options.findTag++;
+            break;
+            case CL_ATTR:
+                claimData=1;
+                check(cur,argc,"Expecting HTML attribute.");
+                Prox.regexString = argv[cur+1];
+                Prox.options.findAttr++;
+            break;
+            case CL_COUNT:
+                claimData=1;
+                check(cur,argc,"Expecting a number for limiting insertions.");
+                Prox.options.count = atoi(argv[cur+1]);
+            break;
             case CL_SAVE_CLIENT:
+                Prox.options.saveClient++;
+            break;
             case CL_SAVE_SERVER:
+                Prox.options.saveServer++;
+            break;
             case CL_SAVE_HEADERS:
+                Prox.options.saveHeaders++;
+            break;
             case CL_GRAVITY:
+                Prox.events.gravity++;
+            break;
             case CL_RICKROLL:
-                flags |= o;
+                Prox.events.rickroll++;
             break;
             case CL_NOTHING:
-                if (!claimData)
-                    target = argv[cur];
-                claimData = 0;
+                if (claimData-- <= 0){
+                    Prox.targetHost = argv[cur];
+                    claimData = 0;
+                }
             break;
         } 
     }
-    printf("target: %s\n", target);
-    printf("regex: %s\n", regex);
-    printf("str: %s\n", str);
-    if (pos==CL_REPLACE)printf("replace\n");
-    else if (pos==CL_BEFORE)printf("before\n");
-    else if (pos==CL_AFTER)printf("after\n");
-    printf("files: ");
-    for(int t=0; t<filenum; t++)
-        printf(" %s", files[t]);
-    printf("\n");
+    int ret;
+    if ((ret=hostIsAlive(Prox.targetHost)) != 0){
+        fprintf(stderr, "Could not find host %s: %s\n", Prox.targetHost, gai_strerror(ret));
+        die("");
+    }
+    if (Prox.options.findTag || Prox.options.findAttr){
+        if (Prox.regex != (Regex*)0){
+            printf("warning: supplied regex string is being \
+            ignored because an HTML element is specified.\n");
+            freeRegex(Prox.regex);
+        }
+        char buf[1000];
+        if (strlen(Prox.regexString)>950)
+            die("HTML element is too large");
+        if (Prox.options.findTag){
+            printf("finding %s\n", Prox.regexString);
+            sprintf(buf,"((<%s)(.*)(</%s>))", Prox.regexString, Prox.regexString);
+        }
+        if(Prox.options.findAttr){
+            printf("find attr %s\n", Prox.regexString);
+            sprintf(buf,"((%s=\"[^\"]+))", Prox.regexString);
+        }
+        Prox.regex = compileRegex(buf);
+    }
+    /*printf("target: %s\n", Prox.targetHost);
+    printf("regex: %s\n", Prox.regexString);
+    printf("str: %s\n", Prox.replaceString);
+    if (Prox.options.position==CL_REPLACE)printf("replace\n");
+    else if (Prox.options.position==CL_BEFORE)printf("before\n");
+    else if (Prox.options.position==CL_AFTER)printf("after\n");
 
-    return 0;
-    
+    if(Prox.options.saveClient)
+        printf("saving client data\n");
+    if(Prox.options.saveServer)
+        printf("saving server data\n");
+    if(Prox.options.saveHeaders)
+        printf("saving header data\n");
+
+    if(Prox.events.gravity)
+        printf("gravity\n");
+    if(Prox.events.rickroll)
+        printf("rickrol\n");
+
+    printf("files: ");
+    for(int t=0; t<Prox.filenum; t++)
+        printf(" %s", Prox.files[t]);
+    printf("\n");
+    */
 }
