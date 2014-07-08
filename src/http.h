@@ -1,12 +1,12 @@
+/* Maintain HTTP connections and [de]serialize them
+ * */
+
 #ifndef HTTP_H
 #define HTTP_H
 
 #include "utils.h"
 #include "tcp.h"
 #include "ssl.h"
-
-/* Http library
- * */
 
 
 typedef struct _HttpHeader{

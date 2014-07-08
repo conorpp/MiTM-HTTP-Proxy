@@ -1,3 +1,6 @@
+/* Regex functionality biased for HTML parsing
+* */
+
 #include <stdlib.h>
 #include <stdio.h>
 #include <string.h>

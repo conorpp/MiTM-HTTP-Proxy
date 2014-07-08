@@ -1,9 +1,8 @@
+/* TCP connections and networking
+* */
+
 #ifndef TCP_H
 #define TCP_H
-
-/*
-*   Functionality for TCP connections
-*/
 
 #include <stdio.h>
 #include <string.h>         //memset, memmove, str functions

@@ -1,3 +1,6 @@
+/* Additional string functionality
+* */
+
 #include <string.h>
 #include <stdio.h>
 #include "regex.h"

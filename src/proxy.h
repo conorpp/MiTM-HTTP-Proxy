@@ -1,3 +1,6 @@
+/* Functionaly specific to application and proxying
+* */
+
 #ifndef _PROXY_H_
 #define _PROXY_H_
 
@@ -8,10 +11,6 @@
 #include "utils.h"
 #include "regex.h"
 
-
-
-/* Functionaly specific to application and proxying
-* */
 
 struct __SETTINGS__{
     struct{

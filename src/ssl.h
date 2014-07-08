@@ -1,3 +1,6 @@
+/* SSL connection functionality based on openssl
+* */
+
 #ifndef SSL_UTILS_H
 #define SSL_UTILS_H
 

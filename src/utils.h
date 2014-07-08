@@ -1,3 +1,6 @@
+
+/*Error Checking, signal catching, types
+* */
 #ifndef UTILS_H
 #define UTILS_H
 
@@ -8,8 +11,6 @@
 #include <signal.h>     // signal
 #include <stdint.h>
 
-/*Error Checking, signal catching, types
- ****************************************************/
 
 
 #if UINTPTR_MAX == 0xffffffff

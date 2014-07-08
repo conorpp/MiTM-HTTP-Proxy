@@ -1,4 +1,5 @@
-
+/* Command line interface for Prox
+* */
 #ifndef _COMMANDLINE_H_
 #define _COMMANDLINE_H_
 
@@ -56,8 +57,6 @@ int parseArgs(int _argc, char* argv[], int* cur);
 void Help();
 
 void setProxSettings(int argc, char* argv[]);
-
-
 
 #define MAX_FILES 500
 
