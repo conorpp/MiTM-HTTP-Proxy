@@ -21,6 +21,9 @@
 #endif
 
 
+typedef unsigned char uchar;
+
+
 // exit with a message along with errno message if 
 // it's set
 void die(const char *msg);
