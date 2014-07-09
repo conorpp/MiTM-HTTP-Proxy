@@ -13,6 +13,53 @@
 int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*));
 int editPage(HttpResponse* res);
 
+int replaceFunc(const char* string, Range* r){
+    // Check if theres a match
+    if (matchRegex(string, r, Prox.regex) != 0)
+        return -1; // no more matches!
+         printf("replacing:\n");
+        fflush(stdout);
+        write(fileno(stdout), string + r->start, r->end-r->start);
+        printf("\n");
+    int offset = 0;
+    switch (Prox.options.position){
+        case CL_BEFORE:
+            offset = r->end - r->start;
+            r->end = (r->start += 0);
+        break;
+        case CL_REPLACE:
+        break;
+        case CL_AFTER:
+            r->start = (r->end -= 0);
+        break;
+    }
+    return offset;
+}
+
+int userEditPage(HttpResponse* res){
+    if (Prox.regex == (Regex*)0){
+        return 0;
+    }
+    char *tmp = res->store->content;
+    
+    // Replace with string
+    if (Prox.replaceString != (char*)0){
+        res->store->content = replaceAll(replaceFunc, res->store->content,
+            res->store->contentLength, &res->store->contentLength,
+            Prox.replaceString);
+    }
+    if (tmp != (char*)0 && tmp != res->store->content)free(tmp);
+    tmp = res->store->content;
+    // replace with files
+    printf("Prox files**: %x\n", (int)Prox.files);
+    if (Prox.files != (char**)0)
+        res->store->content = insertFiles(replaceFunc, 
+            res->store->content, res->store->contentLength, 
+            &res->store->contentLength, Prox.files, 1);
+    if (tmp != (char*)0 && tmp != res->store->content) free(tmp);
+    return 0;
+}
+
 int main(int argc, char *argv[]){
     
     if (argc<2){
@@ -47,14 +94,14 @@ int main(int argc, char *argv[]){
 #ifndef NOFORK
         if (fork() == 0){       //   parent
             close(sockfd);
-            proxyHttp(newfd, editPage);
+            proxyHttp(newfd, userEditPage);
             close(newfd);
             exit(0);
         }else{                  //   parent
             close(newfd);
         }
 #else
-        proxyHttp(newfd, editPage);
+        proxyHttp(newfd, userEditPage);
         close(newfd);
 #endif
     }

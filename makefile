@@ -31,7 +31,7 @@ $(OBJ_DIR):
 	mkdir $@
 
 run:
-	./proxy 9999 cert.pem privkey.pem
+	./proxy -p 9999 -ca cert.pem -pk privkey.pem
 
 $(EXE): clean main run
 

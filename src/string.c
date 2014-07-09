@@ -27,24 +27,34 @@ char* replaceAll(int (*regFunc)(const char*, Range*),
     Range range;
     memset(&range, 0, sizeof(Range));
     
+    //TODO lol is this necessary? 
     char* replaced = malloc(length+1);
     memmove(replaced, string, length+1);
 
     *newlength = length;
     char* tmp;
     int offset = 0;
+    // substring does not change
     int sublen = strlen(substr);
-    
-    while (regFunc(replaced + range.start, &range) == 0){
-        
+    int m_offset;
+    // search for each match starting from last match location
+    while ((m_offset=regFunc(replaced + range.start, &range)) != NO_MATCH){
         range.start += offset;
         range.end += offset;
         offset = range.start;
         tmp = replaced;
-        
         replaced = replace(replaced, *newlength, 
                             substr, sublen, &range, newlength);
-
+        
+        // increment the next offset so dont get stuck making
+        // insertions
+        range.start+=m_offset;
+        offset+=m_offset;
+        
+        // add sublen so while doesn't get stuck on same match.
+        range.start += sublen;
+        offset += sublen;
+        
         if (tmp != (char*)0)
             free(tmp);
     }
@@ -64,10 +74,11 @@ char* insertFiles(int (*regFunc)(const char*, Range*),
     char* orig = string;
     char* tmp;
     
-    if ( regFunc(string, &range) != 0) 
+    if ( regFunc(string, &range) == NO_MATCH) 
         return string;
     for (int i=0; i<filenum; i++){
-        
+        if (files[i] == (char*)0)
+            continue;
         tmp = string;
         FILE* f = fopen(files[i], "r");
         if (f == (FILE*)0){

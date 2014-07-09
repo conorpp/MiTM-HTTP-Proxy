@@ -12,6 +12,8 @@
 #ifndef REGEX_H_
 #define REGEX_H_
 
+#define NO_MATCH -1
+
 typedef struct{
     int start;
     int end;
