@@ -21,8 +21,8 @@ void Help(){
         "   --save-client-data <file>: save data sent by client to file.",
         "   --save-server-data <file>: save data sent by server to file.",
         "   -h: include HTTP headers when saving data.",
-        "   -cert <CA file>: Provide a signed central authority certificate to use for MiTM SSL.",
-        "   -priv <PK file>: Provide a private key file for the signed CA file.",
+        "   -ca <CA file>: Provide a signed central authority certificate to use for MiTM SSL.",
+        "   -pk <PK file>: Provide a private key file for the signed CA file.",
         "",
         "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
         "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
@@ -36,10 +36,10 @@ int parseArgs(int _argc, char* argv[], int* cur){
     static int arg = 0;
     if (arg >= _argc)
         return -1;
-    for(int i=0; CL_ARGS[i][0]; i++){
-        if (strncasecmp(argv[arg], CL_ARGS[i], strlen(CL_ARGS[i])) == 0){
+    for(int i=0; CL_ARGS[i].str[0]; i++){
+        if (strcmp( CL_ARGS[i].str, argv[arg]) == 0){
             *cur=arg++;
-            return CL_VAL(i+1);
+            return CL_VAL(i);
         } 
     }
     if(argv[arg][0] == '-'){
@@ -52,8 +52,8 @@ int parseArgs(int _argc, char* argv[], int* cur){
 }
 
 static int isArg(char* str){
-    for(int i=0; CL_ARGS[i][0]; i++){
-        if (strncasecmp(str, CL_ARGS[i], strlen(CL_ARGS[i])) == 0){
+    for(int i=0; CL_ARGS[i].str[0]; i++){
+        if (strncasecmp(str, CL_ARGS[i].str, strlen(CL_ARGS[i].str)) == 0){
             return 1;
         }
     }
@@ -74,7 +74,6 @@ static void checkFile(char* filename){
 
 }
 void setProxSettings(int argc, char* argv[]){
-
     static char* files[MAX_FILES];
     memset(&Prox, 0, sizeof(struct __SETTINGS__));
     Prox.options.position = CL_BEFORE;
@@ -83,6 +82,7 @@ void setProxSettings(int argc, char* argv[]){
     Prox.ssl.certfile = "localhost.pem";
     Prox.ssl.privfile = "privkey.pem";
     Prox.port = "9999";
+    Prox.targetHost = "localhost";
     int o, cur;
     int claimData = 1;
     while( (o=parseArgs(argc, argv, &cur)) != -1){
@@ -108,7 +108,6 @@ void setProxSettings(int argc, char* argv[]){
                     die("You can't specify a string to insert and files");
             break;
             case CL_FILES:
-                printf("files\n");
                 check(cur,argc,"Expecting atleat one file name");
                 while((cur+1<argc) && !isArg(argv[++cur])){
                     char* file = strtok (argv[cur]," ,");
@@ -134,10 +133,8 @@ void setProxSettings(int argc, char* argv[]){
                 Prox.port = argv[cur+1];
             break;
             case CL_CERT_FILE:
-                printf("cert file\n");
                 claimData=1;
                 check(cur,argc,"Expecting signed central authority certificate filename.");
-                printf("checking cert file %s\n", argv[cur+1]);
                 checkFile(argv[cur+1]);
                 Prox.ssl.certfile = argv[cur+1];
             break;
@@ -189,7 +186,7 @@ void setProxSettings(int argc, char* argv[]){
     }
     int ret;
     if ((ret=hostIsAlive(Prox.targetHost)) != 0){
-        fprintf(stderr, "Could not find host %s: %s\n", Prox.targetHost, gai_strerror(ret));
+        fprintf(stderr, "Could not find host \"%s\": %s\n", Prox.targetHost, gai_strerror(ret));
         die("");
     }
     if (Prox.options.findTag || Prox.options.findAttr){
@@ -210,8 +207,10 @@ void setProxSettings(int argc, char* argv[]){
             sprintf(buf,"((%s=\"[^\"]+))", Prox.regexString);
         }
         Prox.regex = compileRegex(buf);
+        printf("compiled regex %s\n",buf);
     }
-    /*printf("target: %s\n", Prox.targetHost);
+#if 0
+    printf("target: %s\n", Prox.targetHost);
     printf("regex: %s\n", Prox.regexString);
     printf("str: %s\n", Prox.replaceString);
     if (Prox.options.position==CL_REPLACE)printf("replace\n");
@@ -234,5 +233,5 @@ void setProxSettings(int argc, char* argv[]){
     for(int t=0; t<Prox.filenum; t++)
         printf(" %s", Prox.files[t]);
     printf("\n");
-    */
+#endif
 }
