@@ -20,13 +20,13 @@ typedef struct{
 } Range;
 
 typedef struct{
-    regex_t r;
-    const char * search;
-    Range o;
+    regex_t* rStart;
+    regex_t* rEnd;
 } Regex;
 
+
 struct __TAGS__{
-     Regex* a,
+     regex_t* a,
           * link,
           * iframe,
           * body,
@@ -35,16 +35,25 @@ struct __TAGS__{
 } HTML_TAGS;
 
 struct __ATTRIBUTES__{
-    Regex* href,
+    regex_t* href,
          * src;
 } HTML_ATTR;
 
 void generateRegexes();
 
+
+int matchRegex_t (const char* string, Range* range, regex_t* reg);
 int matchRegex (const char* string, Range* range, Regex* reg);
 
-Regex* compileRegex(const char* reg);
+int matchRegexTag(const char* string, Range* r, Regex* rgx);
 
+regex_t* compileRegex(const char* reg);
+
+Regex* compileRegexTag(const char* tag);
+
+Regex* compileRegexAttr(const char* attr);
+
+Regex* newRegex();
 
 void freeRegex(Regex* r);
 
