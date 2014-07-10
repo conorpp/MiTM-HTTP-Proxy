@@ -89,13 +89,14 @@ enum HttpState{
     E_readChunks     = (1<<6),  // reading the content.
     E_readMoreChunks = (1<<7),  // reading the content.
     E_continue       = (1<<8),  // Read more data
-    E_finished       = (1<<9)   // all data has been processed.
+    E_finished       = (1<<9),   // all data has been processed.
+    E_reset          = (1<<10)   // all data has been processed.
 };
 
 // Indicate if the data in the HttpStore has all been parsed 
 // or if it still has some left.
 #define HTTP_IS_PARSING(x) \
-    (((x)&4)|((x)&8)|((x)&32)|((x)&64))
+    (((x)&4)|((x)&8)|((x)&32)|((x)&64) )
 
 // Get a new store for storing Http data.
 ///@param flags: pass in one of the macros below.
@@ -108,6 +109,11 @@ enum HttpState{
 #define IS_HTTP_RES(x)  ((x)&0x2)
 #define IS_HTTPS(x)     ((x)&0x4)
 HttpStore* newHttpStore(int flags);
+
+// Resets the state of the http transaction
+// so it'll reparse the data.  good for when the data
+// hasn't all been read in yet.
+void HttpRewind(void *http, int flags);
 
 // Free an allocated http store
 ///@param S: pointer to an allocated HttpStore to free.

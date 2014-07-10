@@ -19,7 +19,6 @@ int HttpRead(void* http){
     else
         r = read(T->socket, buffer, nbytes);
     T->store->length += r;
-    
     return r;
 }
 void HttpWrite(void* http, void* buffer, int num){
@@ -115,6 +114,22 @@ void freeHttpStore(HttpStore* S){
     }
 }
 
+// Resets the state of the http transaction
+// so it'll reparse the data.  good for when the data
+// hasn't all been read in yet.
+void HttpRewind(void *http, int flags){ 
+    printf("---REWINDING\n");
+
+    HttpTransaction* T = (HttpTransaction*) http;
+    HttpStore* S = T->store;
+    S->offset = 0;
+    if (IS_HTTP_REQ(flags))
+        S->state = E_readMethod;
+    else
+        S->state = E_readStatus;
+    freeHttpHeaders(&T->header);
+}
+
 void writeHttpHeaders(void *http, HttpHeader* first){
     HttpHeader* H;
     for(H=first; H != (HttpHeader*)0; H=H->next){
@@ -159,7 +174,9 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
 
     if (
             strncasecmp(httpbuf, "\r\n", 2) == 0 ||
-            strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 
+            strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 ||
+            strncasecmp(httpbuf, "\n\n", 2) == 0 ||
+            strncasecmp(httpbuf, "\n", 1) == 0 
        ){
         return 0;
     }
@@ -170,12 +187,14 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
         addHttpHeader(header, headertype, data);
         return (strlen(headertype) + strlen(data) + 4);
     }else{
-            printf("--leftover str:%s\n", httpbuf);
-            printf("--bytes: ");
+            printf("--Warning: bad http header ending\n");
+            printHttpHeaders(header);
+        
+            //printf("--bytes: ");
+            //for(int i=0; i<10; i++)
+            //    printf(" %x", *httpbuf++);
+            //fflush(stdout);
             return -1;
-            while(*httpbuf)
-                printf("%c", *httpbuf++);
-            fflush(stdout);
     }
 
     return -1;
@@ -430,7 +449,7 @@ int parseHttpHeaders(HttpHeader** header, HttpStore* http_store){
     while((l = HttpParseHeader(header, httpbuf)) > 0){
         if (http_store->offset > http_store->length){
             printf("--EXCEEDING STORE SIZE %d\n", http_store->length);
-            exit(0);
+            //exit(0);
         }
         http_store->offset += l;
         http_store->headerLength += l;
@@ -525,7 +544,8 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
             }else{
                 // Not all the headers are present?
                 printf("---Reading more of header\n");
-                http_store->state = E_readMoreHeader;  
+                dumpStore(http_store);
+                http_store->state = E_reset;  
             }
         break;
         // Read in the content if its not chunked
