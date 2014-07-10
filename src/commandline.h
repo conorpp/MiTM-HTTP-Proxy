@@ -30,7 +30,9 @@ static struct _Arg_ CL_ARGS[] = {
     {"-before", CL_BEFORE},
 #define CL_REPLACE (1<<5)
     {"-replace", CL_REPLACE},
-#define CL_COUNT (1<<6)
+#define CL_APPEND (1<<6)
+    {"-append", CL_APPEND},
+#define CL_COUNT (3)
     {"-c", CL_COUNT},
 #define CL_STRING (1<<7)
     {"-string", CL_STRING},

@@ -14,11 +14,8 @@
 
 struct __SETTINGS__{
     struct{
-        uchar gravity;
-        uchar rickroll;
-    }events;
-    struct{
         int position;
+        int offset;
         uchar findTag;
         uchar findAttr;
         uchar saveClient;
@@ -38,6 +35,7 @@ struct __SETTINGS__{
     char** files;
     int filenum;
     char* port;
+    int(*match)(const char*, Range*, Regex*);
 }Prox;
 
 

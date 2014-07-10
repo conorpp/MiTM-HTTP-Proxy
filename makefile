@@ -9,7 +9,7 @@ LFLAGS=-lssl -lcrypto -lz
 EXE=proxy
 
 #Obj files, build location
-OBJS=utils.o tcp.o http.o main.o ssl.o reader.o string.o regex.o proxy.o commandline.o
+OBJS=utils.o tcp.o http.o main.o ssl.o reader.o string.o regex.o proxy.o commandline.o scenarios.o
 OBJ_DIR=build
 OBJS_OUTPUT=$(addprefix $(OBJ_DIR)/,$(OBJS))
 
@@ -31,7 +31,7 @@ $(OBJ_DIR):
 	mkdir $@
 
 run:
-	./proxy -p 9999 -ca cert.pem -pk privkey.pem
+	./proxy -p 9999 -ca data/cert.pem -pk data/privkey.pem
 
 $(EXE): clean main run
 

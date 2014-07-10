@@ -51,7 +51,7 @@ regex_t* compileRegex(const char* reg);
 
 Regex* compileRegexTag(const char* tag);
 
-Regex* compileRegexAttr(const char* attr);
+Regex* compileRegexAttr(const char* attr, const char* tag);
 
 Regex* newRegex();
 

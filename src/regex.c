@@ -57,17 +57,23 @@ Regex* compileRegexTag(const char* tag){
     printf(" (...) %s\n",buf);
     return rgx;
 }
-Regex* compileRegexAttr(const char* attr){
+Regex* compileRegexAttr(const char* attr, const char* tag){
     char buf[1000];
     if (strlen(attr)>950)
         die("HTML element is too large");
     Regex* rgx = newRegex();
-    rgx->rStart = compileRegex("<[^>]*>");
+    if (tag != (char*)0)
+        sprintf(buf, "<%s[^>]*>", tag);
+    else
+        sprintf(buf, "<[^>]*>");
+    rgx->rStart = compileRegex(buf);
+    printf("compiled regexes %s",buf);
     sprintf(buf,"((%s=\"[^\"]+\"))", attr);
     rgx->rEnd = compileRegex(buf);
-    printf("compiled regexes <[^>]*> and %s\n",buf);
+    printf(" and %s\n",buf);
     return rgx;
 }
+
 Regex* newRegex(){
     Regex* rgx = malloc(sizeof(Regex));
     memset(rgx, 0, sizeof(Regex));

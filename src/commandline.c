@@ -1,4 +1,5 @@
 #include "commandline.h"
+#include "scenarios.h"
 
 void Help(){
     char * lines[] = {
@@ -11,6 +12,7 @@ void Help(){
         "   -after: indicate to insert string or files after match",
         "   -before: indicate to insert string or files before match (default)",
         "   -replace: indicate to replace match with string or files",
+        "   -append: insert string or files inside match",
         "   -c <number>: limit the number of times to match and insert. Defaults to inserting after every match.",
         "   -string <string>: pass in a string to insert. ",
         "   -files <file1 file2 ...>: pass in files to insert.",
@@ -34,6 +36,10 @@ void Help(){
 
 int parseArgs(int _argc, char* argv[], int* cur){
     static int arg = 0;
+    if (_argc == -1){
+        arg = 0;
+        return -1;
+    }
     if (arg >= _argc)
         return -1;
     for(int i=0; CL_ARGS[i].str[0]; i++){
@@ -52,12 +58,14 @@ int parseArgs(int _argc, char* argv[], int* cur){
 }
 
 static int isArg(char* str){
+    printf("Cchekinf arg\n");
     for(int i=0; CL_ARGS[i].str[0]; i++){
         if (strncasecmp(str, CL_ARGS[i].str, strlen(CL_ARGS[i].str)) == 0){
             return 1;
         }
     }
     return 0;
+    printf("cehcekd arg\n");
 }
 
 static void check(int arg, int argc, char *msg){
@@ -75,27 +83,36 @@ static void checkFile(char* filename){
 }
 void setProxSettings(int argc, char* argv[]){
     static char* files[MAX_FILES];
-    memset(&Prox, 0, sizeof(struct __SETTINGS__));
-    Prox.options.position = CL_BEFORE;
-    Prox.files = files;
-    Prox.ssl.enabled++;
-    Prox.ssl.certfile = "localhost.pem";
-    Prox.ssl.privfile = "privkey.pem";
-    Prox.port = "9999";
-    Prox.targetHost = "localhost";
+    static int init = 0;
+    if (!init++){
+        memset(&Prox, 0, sizeof(struct __SETTINGS__));
+        Prox.options.position = CL_BEFORE;
+        Prox.files = files;
+        Prox.ssl.enabled++;
+        Prox.ssl.certfile = "data/localhost.pem";
+        Prox.ssl.privfile = "data/privkey.pem";
+        Prox.port = "9999";
+        Prox.targetHost = "localhost";
+        Prox.match = matchRegex;
+    }
     int o, cur;
     int claimData = 1;
+    long long int scenarios = 0;
+    char* tag = (char*) 0;
+    char* attr = (char*) 0;
     while( (o=parseArgs(argc, argv, &cur)) != -1){
         switch(o){
             case CL_REGEX:
                 claimData = 1;
                 check(cur,argc,"Expecting a POSIX regex");
                 Prox.regexString = argv[cur+1]; 
-                Prox.regex = compileRegex(Prox.regexString);
+                Prox.regex = newRegex();
+                Prox.regex->rStart = compileRegex(Prox.regexString);
                 break;
             case CL_AFTER:
             case CL_BEFORE:
             case CL_REPLACE:
+            case CL_APPEND:
                 Prox.options.position = o;
             break;
             case CL_STRING:
@@ -108,9 +125,14 @@ void setProxSettings(int argc, char* argv[]){
                     die("You can't specify a string to insert and files");
             break;
             case CL_FILES:
+                printf("checking file %s\n", argv[cur]);
                 check(cur,argc,"Expecting atleat one file name");
+                printf("");
                 while((cur+1<argc) && !isArg(argv[++cur])){
+                    printf("checking file+1 %s\n", argv[cur]);
                     char* file = strtok (argv[cur]," ,");
+                    file =argv[cur];
+                    printf("looking at %s\n",file);
                     claimData++;
                     while(file != (char*) 0){
                         if (++Prox.filenum >= MAX_FILES)
@@ -147,13 +169,13 @@ void setProxSettings(int argc, char* argv[]){
             case CL_TAG:
                 claimData=1;
                 check(cur,argc,"Expecting HTML tag.");
-                Prox.regexString = argv[cur+1];
+                tag = argv[cur+1];
                 Prox.options.findTag++;
             break;
             case CL_ATTR:
                 claimData=1;
                 check(cur,argc,"Expecting HTML attribute.");
-                Prox.regexString = argv[cur+1];
+                attr = argv[cur+1];
                 Prox.options.findAttr++;
             break;
             case CL_COUNT:
@@ -171,10 +193,8 @@ void setProxSettings(int argc, char* argv[]){
                 Prox.options.saveHeaders++;
             break;
             case CL_GRAVITY:
-                Prox.events.gravity++;
-            break;
             case CL_RICKROLL:
-                Prox.events.rickroll++;
+                scenarios |= o;
             break;
             case CL_NOTHING:
                 if (claimData-- <= 0){
@@ -189,26 +209,31 @@ void setProxSettings(int argc, char* argv[]){
         fprintf(stderr, "Could not find host \"%s\": %s\n", Prox.targetHost, gai_strerror(ret));
         die("");
     }
+    if (Prox.regexString != (char* )0)
+        Prox.options.offset = strlen(Prox.regexString);
     if (Prox.options.findTag || Prox.options.findAttr){
         if (Prox.regex != (Regex*)0){
             printf("warning: supplied regex string is being \
             ignored because an HTML element is specified.\n");
             freeRegex(Prox.regex);
         }
-        char buf[1000];
-        if (strlen(Prox.regexString)>950)
-            die("HTML element is too large");
-        if (Prox.options.findTag){
-            printf("finding %s\n", Prox.regexString);
-            sprintf(buf,"((<%s)(.*)(</%s>))", Prox.regexString, Prox.regexString);
+        if (Prox.options.findTag && !Prox.options.findAttr){
+            Prox.regex = compileRegexTag(tag); 
+            Prox.match = matchRegexTag;
+            Prox.options.offset += 3; 
         }
-        if(Prox.options.findAttr){
-            printf("find attr %s\n", Prox.regexString);
-            sprintf(buf,"((%s=\"[^\"]+))", Prox.regexString);
+        else if(Prox.options.findAttr){
+           Prox.regex = compileRegexAttr(attr, tag); 
+           Prox.options.offset += 1; 
         }
-        Prox.regex = compileRegex(buf);
-        printf("compiled regex %s\n",buf);
+
     }
+
+    parseArgs(-1, NULL, NULL);
+    if (scenarios & CL_GRAVITY)
+        setupGravity();
+    else if(scenarios & CL_RICKROLL)
+        setupRickRoll();
 #if 0
     printf("target: %s\n", Prox.targetHost);
     printf("regex: %s\n", Prox.regexString);
@@ -224,10 +249,6 @@ void setProxSettings(int argc, char* argv[]){
     if(Prox.options.saveHeaders)
         printf("saving header data\n");
 
-    if(Prox.events.gravity)
-        printf("gravity\n");
-    if(Prox.events.rickroll)
-        printf("rickrol\n");
 
     printf("files: ");
     for(int t=0; t<Prox.filenum; t++)

@@ -15,13 +15,16 @@ int editPage(HttpResponse* res);
 
 int replaceFunc(const char* string, Range* r){
     // Check if theres a match
-    if (matchRegex(string, r, Prox.regex) != 0)
+    
+    int offset = 0;
+    if (Prox.match(string, r, Prox.regex) != 0)
         return -1; // no more matches!
-         printf("replacing:\n");
+    if(0){
+        printf("replacing:\n");
         fflush(stdout);
         write(fileno(stdout), string + r->start, r->end-r->start);
         printf("\n");
-    int offset = 0;
+    }
     switch (Prox.options.position){
         case CL_BEFORE:
             offset = r->end - r->start;
@@ -31,6 +34,10 @@ int replaceFunc(const char* string, Range* r){
         break;
         case CL_AFTER:
             r->start = (r->end -= 0);
+        break;
+        case CL_APPEND:
+            r->start = (r->end -= Prox.options.offset);
+            offset = Prox.options.offset;
         break;
     }
     return offset;
@@ -74,7 +81,7 @@ int main(int argc, char *argv[]){
     // Prepare openSSL for any HttpS connections
     setProxSettings(argc, argv);
     SSL_Init(Prox.ssl.certfile, Prox.ssl.privfile);
-    generateRegexes();
+    //generateRegexes();
 
     sockfd = Listen(NULL, Prox.port);
     
@@ -106,25 +113,6 @@ int main(int argc, char *argv[]){
 #endif
     }
 
-    return 0;
-}
-
-
-int editPage(HttpResponse* res){
-    char *tmp = res->store->content;
-    
-    // Replace all links
-    res->store->content = replaceAll(findLink, res->store->content,
-            res->store->contentLength, &res->store->contentLength,
-            "http://youtu.be/dQw4w9WgXcQ");
-    if (tmp != (char*)0 && tmp != res->store->content)free(tmp);
-    char *files[] = {"gravityscript.html"};
-    tmp = res->store->content;
-    res->store->content = insertFiles(findHeadEnd, 
-        res->store->content, res->store->contentLength, 
-        &res->store->contentLength, files, 1);
-    if (tmp != (char*)0 && tmp != res->store->content) free(tmp);
-    // Add files
     return 0;
 }
 
@@ -183,6 +171,8 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     while( (HttpRead(&res)) > 0 ){
         do {
            s = HttpParse(&res, &res.header, res.store);
+           if (s == E_reset)
+               HttpRewind(&res, HTTP_RES);
         }while(HTTP_IS_PARSING(s));
         if (s == E_finished)
             break;

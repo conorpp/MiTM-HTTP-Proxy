@@ -74,8 +74,10 @@ char* insertFiles(int (*regFunc)(const char*, Range*),
     char* orig = string;
     char* tmp;
     
-    if ( regFunc(string, &range) == NO_MATCH) 
+    if ( regFunc(string, &range) == NO_MATCH){
+        //die("NO MATCH");
         return string;
+    }
     for (int i=0; i<filenum; i++){
         if (files[i] == (char*)0)
             continue;
