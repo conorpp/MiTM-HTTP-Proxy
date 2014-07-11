@@ -13,7 +13,7 @@ void Help(){
         "   -before: indicate to insert string or files before match (default)",
         "   -replace: indicate to replace match with string or files",
         "   -append: insert string or files inside match",
-        "   -c <number>: limit the number of times to match and insert. Defaults to inserting after every match.",
+        "   -c <number>: limit the number of times to match and insert. Defaults to infinity.",
         "   -string <string>: pass in a string to insert. ",
         "   -files <file1 file2 ...>: pass in files to insert.",
         "   -matchtag <HTML tag>: Use a built in regex to match an entire HTML tag\n\
@@ -28,7 +28,7 @@ void Help(){
         "",
         "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
         "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
-        "\0"  
+        "\0"
     };
     for(int i=0; lines[i][0]; i++ )
         printf("%s\n", lines[i]);
@@ -46,7 +46,7 @@ int parseArgs(int _argc, char* argv[], int* cur){
         if (strcmp( CL_ARGS[i].str, argv[arg]) == 0){
             *cur=arg++;
             return CL_VAL(i);
-        } 
+        }
     }
     if(argv[arg][0] == '-'){
         fprintf(stderr, "error: unknown option %s\n", argv[arg]);
@@ -94,6 +94,7 @@ void setProxSettings(int argc, char* argv[]){
         Prox.port = "9999";
         Prox.targetHost = "localhost";
         Prox.match = matchRegex;
+        Prox.options.count = -1; // infinity
     }
     int o, cur;
     int claimData = 1;
@@ -105,7 +106,7 @@ void setProxSettings(int argc, char* argv[]){
             case CL_REGEX:
                 claimData = 1;
                 check(cur,argc,"Expecting a POSIX regex");
-                Prox.regexString = argv[cur+1]; 
+                Prox.regexString = argv[cur+1];
                 Prox.regex = newRegex();
                 Prox.regex->rStart = compileRegex(Prox.regexString);
                 break;
@@ -118,7 +119,7 @@ void setProxSettings(int argc, char* argv[]){
             case CL_STRING:
                 claimData = 1;
                 check(cur,argc,"Expecting a string");
-                
+
                 if (Prox.filenum == 0)
                     Prox.replaceString = argv[cur+1];
                 else
@@ -202,7 +203,7 @@ void setProxSettings(int argc, char* argv[]){
                     claimData = 0;
                 }
             break;
-        } 
+        }
     }
     int ret;
     if ((ret=hostIsAlive(Prox.targetHost)) != 0){
@@ -218,13 +219,13 @@ void setProxSettings(int argc, char* argv[]){
             freeRegex(Prox.regex);
         }
         if (Prox.options.findTag && !Prox.options.findAttr){
-            Prox.regex = compileRegexTag(tag); 
+            Prox.regex = compileRegexTag(tag);
             Prox.match = matchRegexTag;
-            Prox.options.offset += 3; 
+            Prox.options.offset += 3;
         }
         else if(Prox.options.findAttr){
-           Prox.regex = compileRegexAttr(attr, tag); 
-           Prox.options.offset += 1; 
+           Prox.regex = compileRegexAttr(attr, tag);
+           Prox.options.offset += 1;
         }
 
     }

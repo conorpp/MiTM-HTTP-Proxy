@@ -2,6 +2,7 @@
     Server
 */
 #include "utils.h"
+#include "logger.h"
 #include "tcp.h"
 #include "http.h"
 #include "ssl.h"
@@ -14,8 +15,11 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*));
 int editPage(HttpResponse* res);
 
 int replaceFunc(const char* string, Range* r){
-    // Check if theres a match
-    
+    // Limit the matches
+    static int limit = -2;
+    if (limit == -2)
+        limit = Prox.options.count;
+   
     int offset = 0;
     if (Prox.match(string, r, Prox.regex) != 0)
         return -1; // no more matches!
@@ -40,6 +44,12 @@ int replaceFunc(const char* string, Range* r){
             offset = Prox.options.offset;
         break;
     }
+
+    // Stop matching if limit reaches.
+    if (limit) limit--;
+    else return -1;
+
+    // return additional offset for start of next match.
     return offset;
 }
 
@@ -77,7 +87,8 @@ int main(int argc, char *argv[]){
     struct sockaddr_storage their_addr;
     socklen_t slen;
     int sockfd, newfd;
-    
+    Logger.logFlags = LOG_ALL;
+    Logger.level = LOG3;
     // Prepare openSSL for any HttpS connections
     setProxSettings(argc, argv);
     SSL_Init(Prox.ssl.certfile, Prox.ssl.privfile);
@@ -85,9 +96,9 @@ int main(int argc, char *argv[]){
 
     sockfd = Listen(NULL, Prox.port);
     
-    printf("Proxy listening on %s\n", Prox.port);
+    Log(LOG_DEBUG|LOG1,"Proxy listening on %s\n", Prox.port);
 #ifdef NOFORK
-    printf("NOFORK\n");
+    Log(LOG_DEBUG|LOG3,"NOFORK\n");
 #endif
     while(1){
        
@@ -144,30 +155,32 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
         }
     }
     if (req.method == (char*)0 || strncasecmp(req.method,"CONNECT",7)==0){
-        printf("--junk request received.\n");
+        Log(LOG_DEBUG|LOG3,"--junk request received.\n");
         req.SSL = (SSL_Connection*)0;
         memset(&res, 0, sizeof(HttpResponse));
         goto done;
     }
-    printf("\n-%%- Request(%d) -%%-\n", clientfd) ;
+    Log(LOG_DEBUG|LOG1,"\n-%%- Request(%d) -%%-\n", clientfd);
     
     // Write the request 
     sprintf(line, "%s %s %s\r\n", req.method, req.path, req.protocol);
-    write(fileno(stdout), line, strlen(line));
+    Log(LOG_REQ_HEADER,"%s",line);
     HttpWrite(&res, line, strlen(line));
-    printf("\n--%% writing headers\n");
+    Log(LOG_DEBUG|LOG1,"\n--%% writing headers\n");
     
     writeHttpHeaders(&res, req.header);
+    printHttpHeaders(&req.header, LOG_REQ_HEADER);
 
     // write any content if there was any
     if (req.store->contentLength){
-        printf("--%% writing content\n");
+        Log(LOG_DEBUG|LOG1,"--%% writing content\n");
         HttpWrite(&res, req.store->content, req.store->contentLength);
-        write(fileno(stdout), req.store->content, req.store->contentLength);
+        LogContent(LOG_REQ_DATA,req.store->content,
+                            req.store->contentLength);
     }
 
     // Retrieve response
-    printf("\n-%%- RESPONSE(%d) -%%-\n", clientfd);
+    Log(LOG_DEBUG|LOG1,"\n-%%- RESPONSE(%d) -%%-\n", clientfd);
     while( (HttpRead(&res)) > 0 ){
         do {
            s = HttpParse(&res, &res.header, res.store);
@@ -181,7 +194,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     // status
     sprintf(line, "%s %d %s\r\n", res.protocol, res.status, res.comment);
     HttpWrite(&req, line, strlen(line));
-    printf("%s", line);
+    Log(LOG_RES_HEADER,"%s", line);
  
     HttpHeader* H = getHttpHeader(res.header, HTTPH_CT);
 
@@ -209,10 +222,11 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     }
     // headers
     writeHttpHeaders(&req, res.header);
+    printHttpHeaders(&res.header, LOG_RES_HEADER);
     // content
     HttpWrite(&req, res.store->content, res.store->contentLength);
-    //if (clearText)
-    //    write(fileno(stdout), res.store->content, res.store->contentLength);
+    LogContent(LOG_RES_DATA, res.store->content,
+                            res.store->contentLength);
     done:
     freeHttpRequest(&req);
     freeHttpResponse(&res);

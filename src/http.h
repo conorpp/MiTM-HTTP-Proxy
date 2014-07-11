@@ -5,6 +5,7 @@
 #define HTTP_H
 
 #include "utils.h"
+#include "logger.h"
 #include "tcp.h"
 #include "ssl.h"
 
@@ -160,7 +161,7 @@ void writeHttpHeaders(void *http, HttpHeader* first);
 // Print out the headers to stdout of a header 
 // linked list for debugging.
 ///@param header: the first header in linked list.
-void printHttpHeaders(HttpHeader **header);
+void printHttpHeaders(HttpHeader **header, int flags);
 
 
 // Parses a string and adds a header to a header

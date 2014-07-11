@@ -7,8 +7,10 @@ int HttpRead(void* http){
     while ((nbytes = T->store->size - T->store->length) < 4){
         T->store->size *= 4;
         T->store->buf = realloc(T->store->buf, T->store->size);
-        printf("--Store: memory exceded. 4x more space made.\n");
-        printf("--space: %d kb\n", T->store->size / (1<<10));
+        Log(LOG_DEBUG|LOG2,
+            "--Store: memory exceded. 4x more space made.\n");
+        Log(LOG_DEBUG|LOG2,
+            "--space: %d kb\n", T->store->size / (1<<10));
     }
     buffer = T->store->buf + T->store->length;
     if (T->is_ssl){
@@ -39,10 +41,10 @@ void HttpWrite(void* http, void* buffer, int num){
 
 void saveHttpContent(HttpStore* httpStore, char* buf, int length){
     while(httpStore->contentSpace - httpStore->contentOffset < length){
-        printf("---allocating x4 space for chunk");
+        Log(LOG_DEBUG|LOG2,"---allocating x4 space for chunk");
         httpStore->content = realloc(httpStore->content, 
                 (httpStore->contentSpace*=4));
-        printf(" (%d)\n", httpStore->contentSpace);
+        Log(LOG_DEBUG|LOG2," (%d)\n", httpStore->contentSpace);
     }
     memmove(httpStore->content+httpStore->contentOffset, buf, length);
     httpStore->contentOffset += length;
@@ -55,7 +57,9 @@ int readChunk(HttpStore* httpStore, char* buf){
     char *newline = strchr(buf, '\n');
     if ( sscanf(buf,"%x", &length) == 1){
         if (httpStore->offset + length > httpStore->length){
-            printf("-- not enough has been read into the buffer for length %d\n", length);
+            Log(LOG_DEBUG|LOG2,
+            "-- not enough has been read into the buffer for length %d\n",
+                length);
             
             return -1;
         }
@@ -72,10 +76,15 @@ int readChunk(HttpStore* httpStore, char* buf){
 }
 
 void dumpStore(HttpStore* http_store){
-    printf("+====Dumping Store======+\n"); 
-    write(fileno(stdout), http_store->buf, http_store->length);
+    Log(LOG_DEBUG|LOG3,"+====Dumping Store======+\n"); 
+    char* buf = malloc(http_store->length+1);
+    memmove(buf, http_store->buf, http_store->length);
+    buf[http_store->length] = '\0';
+    Log(LOG_DEBUG|LOG3, "%s",buf);
     fflush(stdout);
-    printf("\n+====================+\n");
+    if (buf != (char*) 0)
+        free(buf);
+    Log(LOG_DEBUG|LOG3,"\n+====================+\n");
 }
 
 void HttpWrap(void* http, int sockfd, int flags){
@@ -118,7 +127,7 @@ void freeHttpStore(HttpStore* S){
 // so it'll reparse the data.  good for when the data
 // hasn't all been read in yet.
 void HttpRewind(void *http, int flags){ 
-    printf("---REWINDING\n");
+    Log(LOG_DEBUG|LOG3,"---REWINDING\n");
 
     HttpTransaction* T = (HttpTransaction*) http;
     HttpStore* S = T->store;
@@ -142,31 +151,21 @@ void writeHttpHeaders(void *http, HttpHeader* first){
     //        break;
     //    }
         HttpWrite(http, HTTP_BUF, strlen(HTTP_BUF));
-        printf("%s", HTTP_BUF);
     }
 
     // finish header with empty line
     HttpWrite(http, "\r\n", 2);
-    write(fileno(stdout), "\r\n", 2);
 }
 
-void printHttpHeaders(HttpHeader **header){
+void printHttpHeaders(HttpHeader **header, int flags){
     HttpHeader** tmp = header;
-    printf("\n");
+    Log(flags,"\n");
     while(*tmp != (HttpHeader*)0){
-        printf("%s: %s\n", (*tmp)->header, (*tmp)->data);
+        Log(flags,"%s: %s\n", (*tmp)->header, (*tmp)->data);
         tmp = &((*tmp)->next);
     }
-    printf("\n");
+    Log(flags, "\n");
 }
-/*
-void saveHttpHeaders(HttpStore* S){
-    if (S->headerLength){
-        char* tmp = S->headers;
-        S->headers = malloc(S->headerLength);
-        memmove(S->headers, tmp, S->headerLength);
-    }
-}*/
 
 int HttpParseHeader(HttpHeader** header, char* httpbuf){
     static char headertype[100], data[10000];
@@ -187,8 +186,8 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
         addHttpHeader(header, headertype, data);
         return (strlen(headertype) + strlen(data) + 4);
     }else{
-            printf("--Warning: bad http header ending\n");
-            printHttpHeaders(header);
+            Log(LOG_DEBUG|LOG1,"--Warning: bad http header ending\n");
+            printHttpHeaders(header, LOG_DEBUG|LOG1);
         
             //printf("--bytes: ");
             //for(int i=0; i<10; i++)
@@ -308,7 +307,7 @@ void freeHttpHeader(HttpHeader** header){
 
 int HttpParseMethod(HttpRequest* req, const char* str){
     if (sizeof str > HTTP_BUF_SIZE){
-        printf("Http request str is longer than max %d bytes", HTTP_BUF_SIZE);
+        Log(LOG_DEBUG|LOG1,"Http request str is longer than max %d bytes", HTTP_BUF_SIZE);
         exit(3);
     }
     static char *method = &HTTP_BUF[0];
@@ -316,7 +315,7 @@ int HttpParseMethod(HttpRequest* req, const char* str){
     static char *protocol = &HTTP_BUF[10102];
     int size, total = 0;
     if((sscanf(str, "%100[^ ] %10000[^ ] %100[^ \r\n]", method, url, protocol))!=3){
-        printf("%s\n\n",str);
+        Log(LOG_DEBUG|LOG1,"%s\n\n",str);
         die("invalid Http request");
         
     }
@@ -349,7 +348,7 @@ int HttpParseMethod(HttpRequest* req, const char* str){
 
 int HttpParseStatus(HttpResponse* res, const char* str){
     if (sizeof str > HTTP_BUF_SIZE){
-        printf("Http request str is longer than max %d bytes", HTTP_BUF_SIZE);
+        Log(LOG_DEBUG|LOG1,"Http request str is longer than max %d bytes", HTTP_BUF_SIZE);
         exit(3);
     }
     static char *protocol = &HTTP_BUF[0];
@@ -357,7 +356,7 @@ int HttpParseStatus(HttpResponse* res, const char* str){
 
     int size, total = 0;
     if(sscanf(str, "%100s %d %1000[^\r\n]", protocol, &res->status, comment)!=3){
-       printf("%s\n",str); 
+       Log(LOG_DEBUG|LOG1,"%s\n",str); 
         die("invalid Http response");
     }
     res->comment = (char *) malloc( (size = strlen(comment)+1) );
@@ -448,7 +447,7 @@ int parseHttpHeaders(HttpHeader** header, HttpStore* http_store){
     // Parse all available headers.
     while((l = HttpParseHeader(header, httpbuf)) > 0){
         if (http_store->offset > http_store->length){
-            printf("--EXCEEDING STORE SIZE %d\n", http_store->length);
+            Log(LOG_DEBUG|LOG1,"--EXCEEDING STORE SIZE %d\n", http_store->length);
             //exit(0);
         }
         http_store->offset += l;
@@ -480,7 +479,7 @@ int parseHttpContent(HttpStore* http_store){
     while( (l = http_store->length - http_store->offset) < 0 )
         http_store->offset -= l;
 
-    printf("reading content %d / %d\n",
+    Log(LOG_DEBUG|LOG2,"reading content %d / %d\n",
             http_store->length - http_store->offset, 
             http_store->contentLength );
     // Check if the content length has been met.
@@ -499,7 +498,7 @@ int parseHttpChunks(HttpStore* http_store){
     while( (l=readChunk(http_store, httpbuf)) > 0 ){
         http_store->offset += l;
         httpbuf += l;
-        printf("got %d chunks\n",l);
+        Log(LOG_DEBUG|LOG3,"got %d chunks\n",l);
     }
     return l;    
 }
@@ -543,7 +542,7 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 break;
             }else{
                 // Not all the headers are present?
-                printf("---Reading more of header\n");
+                Log(LOG_DEBUG|LOG2,"---Reading more of header\n");
                 dumpStore(http_store);
                 http_store->state = E_reset;  
             }
@@ -565,7 +564,7 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 http_store->state = E_finished;
             else{   // More data must be read in
                 http_store->state = E_readMoreChunks;
-                printf("---need to read more chunks");
+                Log(LOG_DEBUG|LOG2,"---need to read more chunks");
             }
         break;
     }
