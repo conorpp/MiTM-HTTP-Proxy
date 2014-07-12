@@ -34,6 +34,7 @@ void Help(){
         "   -ca <CA-file>: Provide a signed central authority certificate to use for MiTM SSL.",
         "   -pk <PK-file>: Provide a private key file for the signed CA file.",
         "   -timeout <number>: Provide a timeout for hangups on client and server transactions in seconds. Default is 10.",
+        "   -v <0-5>: Set the verbosity level from 0-5. 0 being the lowest. Default 1.",
         "",
         "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
         "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
@@ -97,7 +98,7 @@ static int checkFile(char* filename, int kill){
 
 }
 void setProxSettings(int argc, char* argv[]){
-    printf("\n")
+    printf("\n");
     static char* files[MAX_FILES];
     static int init = 0;
     if (!init++){
@@ -271,6 +272,11 @@ void setProxSettings(int argc, char* argv[]){
                 Logger.outputFlags |= LOG_RES_HEADER;
                 Logger.outputFlags |= LOG_REQ_HEADER;
             break;
+            case CL_VERBOSITY:
+                claimData=1;
+                check(cur,argc,"Expecting a verbosity level.");
+                Logger.level = 1<<atoi(argv[cur+1]);
+            break;
             case CL_GRAVITY:
             case CL_RICKROLL:
                 scenarios |= o;
@@ -313,7 +319,7 @@ void setProxSettings(int argc, char* argv[]){
         }
 
     }
-    Log(LOG_DEBUG|LOG1, "printing target headers \n");
+    printf("log level:%d\n", Logger.level);
     printTargetHeaders();
     // Clear save header bits if REQ/RES is not indicated to be saved
     if ((Logger.outputFlags & LOG_REQ_HEADER) &&
@@ -352,9 +358,9 @@ void setProxSettings(int argc, char* argv[]){
 
     // Apply any scenarios specified
     if (scenarios & CL_GRAVITY)
-        setupGravity();
+        return setupGravity();
     else if(scenarios & CL_RICKROLL)
-        setupRickRoll();
+        return setupRickRoll();
 
     /// Debug logging
     int flag = LOG_DEBUG|LOG4;

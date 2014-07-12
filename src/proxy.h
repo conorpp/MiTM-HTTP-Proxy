@@ -51,7 +51,6 @@ struct __SETTINGS__{
     int thNum;
 }Prox;
 
-HeaderTarget* getHeaderTarget(char *headerType, char* headerData, int flags);
 void freeHeaderTarget(HeaderTarget* ht);
 
 // Decodes a deflate or gzip buffer.

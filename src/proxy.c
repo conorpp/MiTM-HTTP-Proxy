@@ -38,17 +38,14 @@ void decodeGzip(char** gzip, int *length){
     *length = (int)strm.total_out;
 }
 
-HeaderTarget* getHeaderTarget(char *headerType, char* headerData, int flags){
-    HeaderTarget* ht = malloc(sizeof(HeaderTarget));
-    ht->flags = flags;
-    addHttpHeader(&ht->headers, headerType, headerData);
-    return ht;
-}
-void freeHeaderTarget(HeaderTarget* ht){
-    if (ht != (HeaderTarget*) 0){
-        freeHttpHeaders(&ht->headers);
-        free(ht);
+
+void freeHeaderTargets(){
+    if (Prox.targetHeaders == (HeaderTarget*)0)
+        return;
+    for (int i=0; i<Prox.thNum; i++){
+        freeHttpHeaders(&Prox.targetHeaders[i].headers);
     }
+    free(Prox.targetHeaders);
 }
 
 void proxyHeaders(HttpHeader** first){
@@ -96,6 +93,9 @@ void addTargetHeader(char* type, char* data, int flags){
         Prox.targetHeaders = realloc(Prox.targetHeaders,
                                     sizeof(HeaderTarget) * (Prox.thNum));
     }
+    // set to null so a new header gets added properly
+    Prox.targetHeaders[Prox.thNum-1].headers = (HttpHeader*) 0;
+    // add http header
     addHttpHeader(&Prox.targetHeaders[Prox.thNum-1].headers, type,data);
     Prox.targetHeaders[Prox.thNum-1].flags = flags;
 }

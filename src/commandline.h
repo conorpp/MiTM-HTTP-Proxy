@@ -63,6 +63,8 @@ static struct _Arg_ CL_ARGS[] = {
     {"-ca", CL_CERT_FILE},
 #define CL_TIMEOUT (5)
     {"-timeout", CL_TIMEOUT},
+#define CL_VERBOSITY (43)
+    {"-v", CL_VERBOSITY},
 #define CL_GRAVITY (1<<16)
     {"-gravity", CL_GRAVITY},
 #define CL_RICKROLL (1<<17)
