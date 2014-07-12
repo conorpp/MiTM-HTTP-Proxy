@@ -2,14 +2,14 @@
 
 #Compiling/linking
 CC=clang
-CFLAGS=-c -Wall 
+CFLAGS=-c -Wall
 LFLAGS=-lssl -lcrypto -lz
 
 #Output executable name
 EXE=proxy
 
 #Obj files, build location
-OBJS=utils.o tcp.o http.o main.o ssl.o reader.o string.o \
+OBJS=utils.o tcp.o http.o main.o ssl.o string.o \
      regex.o proxy.o commandline.o scenarios.o logger.o
 OBJ_DIR=build
 OBJS_OUTPUT=$(addprefix $(OBJ_DIR)/,$(OBJS))
@@ -25,7 +25,7 @@ main: $(OBJS_OUTPUT)
 $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 	$(CC) $(CFLAGS) $< -o $@
 
-clean: 
+clean:
 	rm -rf $(OBJ_DIR)/*.o $(EXE)
 
 $(OBJ_DIR):
