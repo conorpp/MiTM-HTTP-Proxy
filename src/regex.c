@@ -48,12 +48,17 @@ Regex* compileRegexTag(const char* tag){
     Regex* rgx = newRegex();
     if (strlen(tag)>450)
         die("HTML element is too large");
+
     sprintf(buf,"<%s[^>]*",tag);
-    Log(LOG_INFO|LOG1, "compiled regex %s",buf);
     rgx->rStart = compileRegex(buf);
+    rgx->rStartTerm = ">";
+    Log(LOG_INFO|LOG1, "compiled regex %s",buf);
+
     sprintf(buf,"</%s>",tag);
     rgx->rEnd = compileRegex(buf);
+    rgx->rEndTerm = ">";
     Log(LOG_INFO|LOG1, " (...) %s\n",buf);
+
     return rgx;
 }
 Regex* compileRegexAttr(const char* attr, const char* tag){
@@ -65,11 +70,16 @@ Regex* compileRegexAttr(const char* attr, const char* tag){
         sprintf(buf, "<%s[^>]*>", tag);
     else
         sprintf(buf, "<[^>]*>");
+
     rgx->rStart = compileRegex(buf);
+    rgx->rStartTerm = ">";
     Log(LOG_INFO|LOG1, "compiled regexes %s",buf);
+
     sprintf(buf,"((%s=\"[^\"]+\"))", attr);
     rgx->rEnd = compileRegex(buf);
+    rgx->rEndTerm = "\"";
     Log(LOG_INFO|LOG1, " and %s\n",buf);
+    
     return rgx;
 }
 

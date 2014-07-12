@@ -31,7 +31,9 @@ typedef unsigned char uchar;
 void die(const char *msg,...);
 
 // Handler to reap zombie processes
-void sigchld_handler(int s);
+void sigchldHandler(int sig);
 
+// Handler for alarms
+void timeoutHandler(int sig);
 
 #endif

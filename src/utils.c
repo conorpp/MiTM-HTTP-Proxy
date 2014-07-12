@@ -15,6 +15,10 @@ void die(const char *msg, ...){
     exit(2);
 }
 
-void sigchld_handler(int s){
+void sigchldHandler(int sig){
     while(waitpid(-1, NULL, WNOHANG) > 0);
+}
+
+void timeoutHandler(int sig){
+  die("Timed out.  Exiting process");
 }

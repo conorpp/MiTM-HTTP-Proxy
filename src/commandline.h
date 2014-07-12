@@ -31,6 +31,8 @@ static struct _Arg_ CL_ARGS[] = {
     {"-replace", CL_REPLACE},
 #define CL_APPEND (1<<6)
     {"-append", CL_APPEND},
+#define CL_PREPEND (7)
+    {"-prepend", CL_PREPEND},
 #define CL_COUNT (3)
     {"-c", CL_COUNT},
 #define CL_STRING (1<<7)
@@ -46,11 +48,13 @@ static struct _Arg_ CL_ARGS[] = {
 #define CL_SAVE_SERVER (1<<12)
     {"--save-server-data", CL_SAVE_SERVER},
 #define CL_SAVE_HEADERS (1<<13)
-    {"-h", CL_SAVE_HEADERS},
+    {"-headers", CL_SAVE_HEADERS},
 #define CL_PRIV_FILE (1<<14)
     {"-pk", CL_PRIV_FILE},
 #define CL_CERT_FILE (1<<15)
     {"-ca", CL_CERT_FILE},
+#define CL_TIMEOUT (5)
+    {"-timeout", CL_TIMEOUT},
 #define CL_GRAVITY (1<<16)
     {"-gravity", CL_GRAVITY},
 #define CL_RICKROLL (1<<17)

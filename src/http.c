@@ -4,6 +4,7 @@ int HttpRead(void* http){
     HttpTransaction* T = (HttpTransaction*) http;
     int r=0, nbytes;
     char* buffer;
+    // reallocate space if necessary
     while ((nbytes = T->store->size - T->store->length) < 4){
         T->store->size *= 4;
         T->store->buf = realloc(T->store->buf, T->store->size);
@@ -12,7 +13,9 @@ int HttpRead(void* http){
         Log(LOG_DEBUG|LOG2,
             "--space: %d kb\n", T->store->size / (1<<10));
     }
+    // Start position to read in data
     buffer = T->store->buf + T->store->length;
+    // read in data
     if (T->is_ssl){
         while( (r += SSL_read(T->SSL->socket, buffer, nbytes))>0){
             if (r > 0) break;
@@ -26,12 +29,11 @@ int HttpRead(void* http){
 void HttpWrite(void* http, void* buffer, int num){
     int ec=0;
     HttpTransaction* T = (HttpTransaction*) http;
-
-    if (T->is_ssl){
+    // write until the desired number of bytes have been written
+    if (T->is_ssl)
         while( (ec += SSL_write(T->SSL->socket, buffer, num))<num);
-    }
     else
-        ec = write(T->socket, buffer, num);
+        while( (ec += write(T->socket, buffer, num)) < num);
 
     if (ec < 0)
         die("HttpWrite: write or SSL_write failed.");
@@ -142,25 +144,17 @@ void HttpRewind(void *http, int flags){
 void writeHttpHeaders(void *http, HttpHeader* first){
     HttpHeader* H;
     for(H=first; H != (HttpHeader*)0; H=H->next){
-    //    switch(H->type){
-    //        case -1://Http_A_ENCODING:
-    //            sprintf(HTTP_BUF, "%s: deflate\r\n", H->header);
-    //        break;
-    //        default:
-                sprintf(HTTP_BUF, "%s: %s\r\n", H->header, H->data);
-    //        break;
-    //    }
+        sprintf(HTTP_BUF, "%s: %s\r\n", H->header, H->data);
         HttpWrite(http, HTTP_BUF, strlen(HTTP_BUF));
     }
-
-    // finish header with empty line
+    // terminate headers with newline
     HttpWrite(http, "\r\n", 2);
 }
 
+//@TODO a pointer to a pointer isn't necessary..
 void printHttpHeaders(HttpHeader **header, int flags){
     HttpHeader** tmp = header;
     while(*tmp != (HttpHeader*)0){
-        Log(0,"printing %s: %s to %d\n", (*tmp)->header, (*tmp)->data, (int)Logger.output);
         Log(flags,"%s: %s\n", (*tmp)->header, (*tmp)->data);
         tmp = &((*tmp)->next);
     }
@@ -173,9 +167,9 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
 
     if (
             strncasecmp(httpbuf, "\r\n", 2) == 0 ||
-            strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 ||
-            strncasecmp(httpbuf, "\n\n", 2) == 0 ||
-            strncasecmp(httpbuf, "\n", 1) == 0
+            strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 //||
+            //strncasecmp(httpbuf, "\n\n", 2) == 0 ||
+            //strncasecmp(httpbuf, "\n", 1) == 0
        ){
         return 0;
     }
@@ -186,14 +180,10 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
         addHttpHeader(header, headertype, data);
         return (strlen(headertype) + strlen(data) + 4);
     }else{
-            Log(LOG_DEBUG|LOG1,"--Warning: bad http header ending\n");
-            printHttpHeaders(header, LOG_DEBUG|LOG1);
-
-            //printf("--bytes: ");
-            //for(int i=0; i<10; i++)
-            //    printf(" %x", *httpbuf++);
-            //fflush(stdout);
-            return -1;
+        Log(LOG_DEBUG|LOG1,"--Warning: bad http header ending\n");
+        //printHttpHeaders(header, LOG_DEBUG|LOG1);
+        // headers not terminated correctly.
+        return -1;
     }
 
     return -1;
@@ -353,7 +343,6 @@ int HttpParseStatus(HttpResponse* res, const char* str){
     }
     static char *protocol = &HTTP_BUF[0];
     static char *comment = &HTTP_BUF[101];
-
     int size, total = 0;
     if(sscanf(str, "%100s %d %1000[^\r\n]", protocol, &res->status, comment)!=3){
        Log(LOG_DEBUG|LOG1,"%s\n",str);
@@ -458,9 +447,6 @@ int parseHttpHeaders(HttpHeader** header, HttpStore* http_store){
     return l;
 }
 
-#define HTTP_CONTENT 1
-#define HTTP_CHUNKED 2
-#define HTTP_NO_CONTENT 3
 int getHttpContent(HttpHeader* header, int* contentLength){
     HttpHeader* h = getHttpHeader(header, HTTPH_CL);
     if (h != (HttpHeader*) 0){
@@ -564,7 +550,7 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 http_store->state = E_finished;
             else{   // More data must be read in
                 http_store->state = E_readMoreChunks;
-                Log(LOG_DEBUG|LOG2,"---need to read more chunks");
+                Log(LOG_DEBUG|LOG2,"---need to read more chunks\n");
             }
         break;
     }

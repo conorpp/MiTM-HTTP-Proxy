@@ -8,6 +8,8 @@
 #include "string.h"
 #include "proxy.h"
 
+
+
 int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*));
 int editPage(HttpResponse* res);
 
@@ -19,25 +21,40 @@ int replaceFunc(const char* string, Range* r){
     int offset = 0;
     if (Prox.match(string, r, Prox.regex) != 0)
         return -1; // no more matches!
-
-    LogContent(LOG_DEBUG|LOG4, string + r->start, r->start - r->end);
+    LogContent(LOG_DEBUG|LOG4, string + r->start, r->end - r->start);
+    if (!r->start && !r->end)
+        return -1;
 
     switch (Prox.options.position){
         case CL_BEFORE:
             offset = r->end - r->start;
-            r->end = (r->start += 0);
+            r->end = (r->start);
         break;
         case CL_REPLACE:
         break;
         case CL_AFTER:
-            r->start = (r->end -= 0);
+            r->start = (r->end);
         break;
         case CL_APPEND:
             r->start = (r->end -= Prox.options.offset);
             offset = Prox.options.offset;
         break;
-    }
+        case CL_PREPEND:
+            offset = r->end;
+            if (Prox.regex->rEndTerm != (char*) 0){
+                char* index = strstr(string + r->start, Prox.regex->rEndTerm);
+                if (index != (char*) 0){
+                    r->start += (int)(index - string - r->start + 1);
+                }
+            }
+            r->end = r->start;
+            offset -= r->start;
 
+            //exit(1);
+        break;
+    }
+    printf("\ninserting at %d:%d\n", r->start, r->end);
+    write(fileno(stdout), string + r->start, 200);
     // Stop matching if limit reaches.
     if (limit) limit--;
     else return -1;
@@ -61,11 +78,10 @@ int userEditPage(HttpResponse* res){
     if (tmp != (char*)0 && tmp != res->store->content)free(tmp);
     tmp = res->store->content;
     // replace with files
-    printf("Prox files**: %x\n", (int)Prox.files);
     if (Prox.files != (char**)0)
         res->store->content = insertFiles(replaceFunc,
             res->store->content, res->store->contentLength,
-            &res->store->contentLength, Prox.files, 1);
+            &res->store->contentLength, Prox.files, Prox.filenum);
     if (tmp != (char*)0 && tmp != res->store->content) free(tmp);
     return 0;
 }
@@ -80,12 +96,18 @@ int main(int argc, char *argv[]){
     struct sockaddr_storage their_addr;
     socklen_t slen;
     int sockfd, newfd;
-    Logger.logFlags = LOG_ALL;
-    Logger.level = LOG3;
-    // Prepare openSSL for any HttpS connections
+
+    // generate the settings
     setProxSettings(argc, argv);
+
+    // Prepare openSSL for any HttpS connections
     SSL_Init(Prox.ssl.certfile, Prox.ssl.privfile);
-    //generateRegexes();
+
+    // set up handler to kill zombie processes
+    signal(SIGCHLD, sigchldHandler);
+
+    // set up handler for timeouts
+    signal(SIGALRM, timeoutHandler);
 
     sockfd = Listen(NULL, Prox.port);
 
@@ -128,6 +150,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
 
     char line[10000];
 
+    alarm(Prox.options.timeout);
     while ((HttpRead(&req)) > 0){
         do{
             s = HttpParse(&req, &req.header, req.store);
@@ -147,6 +170,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
             break;
         }
     }
+    alarm(Prox.options.timeout);
     if (req.method == (char*)0 || strncasecmp(req.method,"CONNECT",7)==0){
         Log(LOG_DEBUG|LOG3,"--junk request received.\n");
         req.SSL = (SSL_Connection*)0;
@@ -166,14 +190,17 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
 
     // write any content if there was any
     if (req.store->contentLength){
-        Log(LOG_DEBUG|LOG1,"--%% writing content\n");
+        Log(LOG_DEBUG|LOG1,"--%% writing content %d\n", req.store->contentLength);
         HttpWrite(&res, req.store->content, req.store->contentLength);
+        printf("LOGGING HTTP REQ DATA %s\n", req.store->content);
+
         LogContent(LOG_REQ_DATA,req.store->content,
                             req.store->contentLength);
     }
 
     // Retrieve response
     Log(LOG_DEBUG|LOG1,"\n-%%- RESPONSE(%d) -%%-\n", clientfd);
+    alarm(Prox.options.timeout);
     while( (HttpRead(&res)) > 0 ){
         do {
            s = HttpParse(&res, &res.header, res.store);
@@ -183,7 +210,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
         if (s == E_finished)
             break;
     }
-
+    alarm(Prox.options.timeout);
     // status
     sprintf(line, "%s %d %s\r\n", res.protocol, res.status, res.comment);
     HttpWrite(&req, line, strlen(line));
@@ -218,9 +245,10 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     printHttpHeaders(&res.header, LOG_RES_HEADER);
     // content
     HttpWrite(&req, res.store->content, res.store->contentLength);
-    LogContent(LOG_RES_DATA, res.store->content,
+    LogContent(LOG_RES_DATA|LOG3, res.store->content,
                             res.store->contentLength);
     done:
+    alarm(0);
     freeHttpRequest(&req);
     freeHttpResponse(&res);
     close(serverfd);

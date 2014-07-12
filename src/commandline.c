@@ -12,7 +12,8 @@ void Help(){
         "   -after: indicate to insert string or files after match",
         "   -before: indicate to insert string or files before match (default)",
         "   -replace: indicate to replace match with string or files",
-        "   -append: insert string or files inside match",
+        "   -append: insert string or files inside match before terminating element",
+        "   -prepend: insert string or files inside match after beginning element",
         "   -c <number>: limit the number of times to match and insert. Defaults to infinity.",
         "   -string <string>: pass in a string to insert. ",
         "   -files <file1 file2 ...>: pass in files to insert.",
@@ -23,9 +24,10 @@ void Help(){
         "   --save-client-data [file]: save data sent by client to file.",
         "   --save-server-data [file]: save data sent by server to file.\n\
                 A file only needs to be specified once. It will be used for both client and server.",
-        "   -h: include HTTP headers when saving data.",
+        "   -headers: include HTTP headers when saving data.",
         "   -ca <CA-file>: Provide a signed central authority certificate to use for MiTM SSL.",
         "   -pk <PK-file>: Provide a private key file for the signed CA file.",
+        "   -timeout <number>: Provide a timeout for hangups on client and server transactions in seconds. Default is 10.",
         "",
         "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
         "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
@@ -103,6 +105,7 @@ void setProxSettings(int argc, char* argv[]){
         Prox.targetHost = "localhost";
         Prox.match = matchRegex;
         Prox.options.count = -1; // infinity
+        Prox.options.timeout = 10; // 10 secs
     }
     int o, cur;
     int claimData = 1;
@@ -119,11 +122,13 @@ void setProxSettings(int argc, char* argv[]){
                 Prox.regexString = argv[cur+1];
                 Prox.regex = newRegex();
                 Prox.regex->rStart = compileRegex(Prox.regexString);
+                Log(LOG_INFO|LOG1,"compiled regex %s\n", Prox.regexString);
                 break;
             case CL_AFTER:
             case CL_BEFORE:
             case CL_REPLACE:
             case CL_APPEND:
+            case CL_PREPEND:
                 Prox.options.position = o;
             break;
             case CL_STRING:
@@ -193,6 +198,11 @@ void setProxSettings(int argc, char* argv[]){
                 check(cur,argc,"Expecting a number for limiting insertions.");
                 Prox.options.count = atoi(argv[cur+1]);
             break;
+            case CL_TIMEOUT:
+                claimData=1;
+                check(cur,argc,"Expecting a value for timeouts.");
+                Prox.options.timeout = atoi(argv[cur+1]);
+            break;
             case CL_SAVE_SERVER:
             case CL_SAVE_CLIENT:
               saving = 1;
@@ -247,6 +257,7 @@ void setProxSettings(int argc, char* argv[]){
             Prox.regex = compileRegexTag(tag);
             Prox.match = matchRegexTag;
             Prox.options.offset += 3;  // length of </>
+            Prox.options.offset += strlen(tag);
         }
         // Compile special tag attr regex
         else if(Prox.options.findAttr){
@@ -306,11 +317,11 @@ void setProxSettings(int argc, char* argv[]){
     else if (Prox.options.position==CL_BEFORE)Log(flag, "before\n");
     else if (Prox.options.position==CL_AFTER)Log(flag, "after\n");
 
-    if(Prox.options.saveClient)
+    if(Logger.outputFlags & LOG_REQ_DATA)
         Log(flag, "saving client data\n");
-    if(Prox.options.saveServer)
+    if(Logger.outputFlags & LOG_RES_DATA)
         Log(flag, "saving server data\n");
-    if(Prox.options.saveHeaders)
+    if((Logger.outputFlags & LOG_RES_HEADER) || (Logger.outputFlags & LOG_REQ_HEADER))
         Log(flag, "saving header data\n");
 
 
@@ -318,5 +329,6 @@ void setProxSettings(int argc, char* argv[]){
     for(int t=0; t<Prox.filenum; t++)
         Log(flag, " %s", Prox.files[t]);
     Log(flag, "\n");
+    Log(flag, "filenum: %d\n", Prox.filenum);
 
 }

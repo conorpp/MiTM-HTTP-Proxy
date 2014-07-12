@@ -22,6 +22,7 @@ struct __SETTINGS__{
         uchar saveServer;
         uchar saveHeaders;
         long long int count;
+        int timeout;
     }options;
     struct{
         uchar enabled;

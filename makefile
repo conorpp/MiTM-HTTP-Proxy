@@ -28,6 +28,9 @@ $(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
 clean:
 	rm -rf $(OBJ_DIR)/*.o $(EXE)
 
+nologs:
+	rm -rf *.log src/*.log build/*.log
+
 $(OBJ_DIR):
 	mkdir $@
 

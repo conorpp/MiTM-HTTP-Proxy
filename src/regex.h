@@ -16,7 +16,9 @@ typedef struct{
 
 typedef struct{
     regex_t* rStart;
+    char* rStartTerm; // terminating character that can be used for [reverse] look aheads
     regex_t* rEnd;
+    char* rEndTerm;
 } Regex;
 
 
