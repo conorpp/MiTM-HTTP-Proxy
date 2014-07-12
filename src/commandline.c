@@ -31,7 +31,7 @@ void Help(){
         "\0"
     };
     for(int i=0; lines[i][0]; i++ )
-        printf("%s\n", lines[i]);
+        Log(LOG1, "%s\n", lines[i]);
 }
 
 int parseArgs(int _argc, char* argv[], int* cur){
@@ -49,8 +49,7 @@ int parseArgs(int _argc, char* argv[], int* cur){
         }
     }
     if(argv[arg][0] == '-'){
-        fprintf(stderr, "error: unknown option %s\n", argv[arg]);
-        die("");
+        die("error: unknown option %s\n", argv[arg]);
     }
 
     *cur = arg++;
@@ -58,14 +57,13 @@ int parseArgs(int _argc, char* argv[], int* cur){
 }
 
 static int isArg(char* str){
-    printf("Cchekinf arg\n");
+
     for(int i=0; CL_ARGS[i].str[0]; i++){
         if (strncasecmp(str, CL_ARGS[i].str, strlen(CL_ARGS[i].str)) == 0){
             return 1;
         }
     }
     return 0;
-    printf("cehcekd arg\n");
 }
 
 static void check(int arg, int argc, char *msg){
@@ -75,8 +73,7 @@ static void check(int arg, int argc, char *msg){
 static void checkFile(char* filename){
     FILE* f;
     if ( (f=fopen(filename, "r")) == (FILE*) 0){
-        printf("Could not open %s\n", filename);
-        die("");
+        die("Could not open %s\n", filename);
     }
     fclose(f);
 
@@ -126,14 +123,11 @@ void setProxSettings(int argc, char* argv[]){
                     die("You can't specify a string to insert and files");
             break;
             case CL_FILES:
-                printf("checking file %s\n", argv[cur]);
                 check(cur,argc,"Expecting atleat one file name");
-                printf("");
                 while((cur+1<argc) && !isArg(argv[++cur])){
-                    printf("checking file+1 %s\n", argv[cur]);
+                    Log(LOG4|LOG_DEBUG,"checking file %s\n", argv[cur]);
                     char* file = strtok (argv[cur]," ,");
                     file =argv[cur];
-                    printf("looking at %s\n",file);
                     claimData++;
                     while(file != (char*) 0){
                         if (++Prox.filenum >= MAX_FILES)
@@ -144,14 +138,14 @@ void setProxSettings(int argc, char* argv[]){
                     }
                 }
                 if (Prox.filenum == 0)
-                    die("Could not find specified file");
+                    die("Could not find specified file \"%s\"", argv[cur]);
             break;
             case CL_PORT:
                 check(cur,argc,"Expecting port number.");
                 int port = atoi(argv[cur+1]);
                 if (port < 0 || port > 1<<15){
-                    fprintf(stderr, "Invalid port number %d\n",port);
-                    die("");
+                    die("Invalid port number %d\n",port);
+
                 }
                 Prox.port = argv[cur+1];
             break;
@@ -207,14 +201,13 @@ void setProxSettings(int argc, char* argv[]){
     }
     int ret;
     if ((ret=hostIsAlive(Prox.targetHost)) != 0){
-        fprintf(stderr, "Could not find host \"%s\": %s\n", Prox.targetHost, gai_strerror(ret));
-        die("");
+        die("Could not find host \"%s\": %s\n", Prox.targetHost, gai_strerror(ret));
     }
     if (Prox.regexString != (char* )0)
         Prox.options.offset = strlen(Prox.regexString);
     if (Prox.options.findTag || Prox.options.findAttr){
         if (Prox.regex != (Regex*)0){
-            printf("warning: supplied regex string is being \
+            Log(LOG_INFO|LOG1, "warning: supplied regex string is being \
             ignored because an HTML element is specified.\n");
             freeRegex(Prox.regex);
         }
@@ -235,25 +228,26 @@ void setProxSettings(int argc, char* argv[]){
         setupGravity();
     else if(scenarios & CL_RICKROLL)
         setupRickRoll();
-#if 0
-    printf("target: %s\n", Prox.targetHost);
-    printf("regex: %s\n", Prox.regexString);
-    printf("str: %s\n", Prox.replaceString);
-    if (Prox.options.position==CL_REPLACE)printf("replace\n");
-    else if (Prox.options.position==CL_BEFORE)printf("before\n");
-    else if (Prox.options.position==CL_AFTER)printf("after\n");
+
+    int flag = LOG_DEBUG|LOG4;
+    Log(flag, "target: %s\n", Prox.targetHost);
+    Log(flag, "regex: %s\n", Prox.regexString);
+    Log(flag, "str: %s\n", Prox.replaceString);
+    if (Prox.options.position==CL_REPLACE)Log(flag, "replace\n");
+    else if (Prox.options.position==CL_BEFORE)Log(flag, "before\n");
+    else if (Prox.options.position==CL_AFTER)Log(flag, "after\n");
 
     if(Prox.options.saveClient)
-        printf("saving client data\n");
+        Log(flag, "saving client data\n");
     if(Prox.options.saveServer)
-        printf("saving server data\n");
+        Log(flag, "saving server data\n");
     if(Prox.options.saveHeaders)
-        printf("saving header data\n");
+        Log(flag, "saving header data\n");
 
 
-    printf("files: ");
+    Log(flag, "files: ");
     for(int t=0; t<Prox.filenum; t++)
-        printf(" %s", Prox.files[t]);
-    printf("\n");
-#endif
+        Log(flag, " %s", Prox.files[t]);
+    Log(flag, "\n");
+
 }

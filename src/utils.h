@@ -9,9 +9,10 @@
 #include <errno.h>      // errno, perror
 #include <sys/wait.h>   // waitpid, WHOHANG
 #include <signal.h>     // signal
-#include <stdint.h>
+#include <stdint.h>     // UINTPTR_MAX
+#include <stdarg.h>     // va_args
 
-
+#include "logger.h"     // Logger is a utility.
 
 #if UINTPTR_MAX == 0xffffffff
     typedef long PTR_SIZE;      // 32 bit
@@ -25,14 +26,12 @@
 typedef unsigned char uchar;
 
 
-// exit with a message along with errno message if 
+// exit with a message along with errno message if
 // it's set
-void die(const char *msg);
+void die(const char *msg,...);
 
 // Handler to reap zombie processes
 void sigchld_handler(int s);
 
 
 #endif
-
-

@@ -1,14 +1,5 @@
 #include "logger.h"
 
-static int LOG_OPTS[] = {
-    LOG_ALL,
-    LOG_REQ_DATA,
-    LOG_RES_DATA,
-    LOG_REQ_HEADER,
-    LOG_RES_HEADER,
-    LOG_DEBUG,
-    0
-};
 
 static int isLoggable(int f1, int logger){
     if (logger & LOG_ALL)
@@ -34,7 +25,7 @@ void Log(int flags, char* msg, ...){
     va_end( args );
 }
 
-void LogContent(int flags, char* msg, int length){
+void LogContent(int flags, const char* msg, int length){
     char* tmp = malloc(length+1);
     memmove(tmp, msg, length);
     tmp[length] = '\0';

@@ -10,6 +10,7 @@
 #include <zlib.h>
 #include "utils.h"
 #include "regex.h"
+#include "commandline.h"    // commandline specific to application
 
 
 struct __SETTINGS__{

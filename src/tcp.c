@@ -10,7 +10,7 @@ struct addrinfo* getTCPInfo(char *hostname, char* port){
     // Use TCP
     hints.ai_socktype = SOCK_STREAM;
     // Lookup host
-    if ( (ec = getaddrinfo(hostname, port, &hints, &res)) != 0) 
+    if ( (ec = getaddrinfo(hostname, port, &hints, &res)) != 0)
         die(gai_strerror(ec));
     return res;
 }
@@ -40,8 +40,7 @@ int Listen(void *addr, char *port){
     if (p == NULL)
         die("server failed to bind");
     if (listen(sockfd, 12) == -1) {
-        perror("listen");
-        exit(1);
+        die("Could not listen");
     }
     freeaddrinfo(res); // all done with this structure
     return sockfd;
@@ -50,8 +49,7 @@ int Listen(void *addr, char *port){
 int Connect(char *hostname, int _port){
     int sockfd;
     if (_port>65535 || _port <1){
-        printf("invalid port number: %d", _port);
-        exit(2);
+        die("invalid port number: %d", _port);
     }
     char port[6];
     sprintf(port, "%d", _port);
@@ -92,4 +90,3 @@ int hostIsAlive(char* host){
     }
     return ret;
 }
-

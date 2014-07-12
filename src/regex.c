@@ -7,7 +7,7 @@ int matchRegex_t (const char* string, Range* range, regex_t* reg)
     regmatch_t m[1];
     int nomatch = regexec (reg, string, 1, m, 0);
     if (nomatch) {
-        printf ("No more matches. (%d)\n",nomatch);
+        Log (LOG_DEBUG|LOG1, "No more matches. (%d)\n",nomatch);
         return nomatch;
     }
     range->start = m[0].rm_so;
@@ -20,7 +20,7 @@ int matchRegex (const char* string, Range* range, Regex* reg){
         return matchRegex_t(string, range, reg->rStart);
     int ec = 0;
     Range offset;
-    
+
     if ( (ec=matchRegex_t(string, &offset, reg->rStart)) == 0){
         ec = matchRegex_t(string + offset.start, range, reg->rEnd);
     }else{
@@ -37,9 +37,8 @@ regex_t* compileRegex(const char* reg){
     if (status != 0) {
         char error_message[1000];
         regerror (status, r, error_message, 1000);
-        printf ("Regex error compiling '%s': %s\n",
+        die("Regex error compiling '%s': %s\n",
                 reg, error_message);
-        exit(1);
     }
     return r;
 }
@@ -50,11 +49,11 @@ Regex* compileRegexTag(const char* tag){
     if (strlen(tag)>450)
         die("HTML element is too large");
     sprintf(buf,"<%s[^>]*",tag);
-    printf("compiled regex %s",buf);
+    Log(LOG_INFO|LOG1, "compiled regex %s",buf);
     rgx->rStart = compileRegex(buf);
     sprintf(buf,"</%s>",tag);
     rgx->rEnd = compileRegex(buf);
-    printf(" (...) %s\n",buf);
+    Log(LOG_INFO|LOG1, " (...) %s\n",buf);
     return rgx;
 }
 Regex* compileRegexAttr(const char* attr, const char* tag){
@@ -67,10 +66,10 @@ Regex* compileRegexAttr(const char* attr, const char* tag){
     else
         sprintf(buf, "<[^>]*>");
     rgx->rStart = compileRegex(buf);
-    printf("compiled regexes %s",buf);
+    Log(LOG_INFO|LOG1, "compiled regexes %s",buf);
     sprintf(buf,"((%s=\"[^\"]+\"))", attr);
     rgx->rEnd = compileRegex(buf);
-    printf(" and %s\n",buf);
+    Log(LOG_INFO|LOG1, " and %s\n",buf);
     return rgx;
 }
 
@@ -89,64 +88,7 @@ void freeRegex(Regex* r){
         free(r);
     }
 }
-/*
-void generateRegexes(){
-    memset(&HTML_TAGS, 0, sizeof(struct __TAGS__));
-    memset(&HTML_ATTR, 0, sizeof(struct __ATTRIBUTES__));
-    HTML_TAGS.a = compileRegex("(<a)[^>]+");
-    HTML_TAGS.link = compileRegex("<link[^>]+");
-    HTML_TAGS.iframe = compileRegex("<iframe[^>]+");
-    HTML_TAGS.script = compileRegex("<script[^>]+");
-    HTML_TAGS.body = compileRegex("((<body)((.|\\s)*)(</body>))");
-    HTML_TAGS.head = compileRegex("((</head>))");
 
-    HTML_ATTR.href = compileRegex("href=\"[^\"]+");
-    HTML_ATTR.src = compileRegex("src=\"[^\"]+");
-}
-
-void freeRegexes(){
-    int ptr_size = sizeof(Regex*);
-    int size = (sizeof(struct __TAGS__))/ptr_size;
-    printf("---freeing regexes\n");
-    for (int i=0; i < size; i++)
-        regfree( (regex_t*)((( PTR_SIZE *)&HTML_TAGS)[i]));
-    
-    size = (sizeof(struct __ATTRIBUTES__))/ptr_size;
-    
-    for (int i=0; i < size; i++)
-        regfree( (regex_t*)((( PTR_SIZE *)&HTML_ATTR)[i]));
-    printf("---freed regexes");
-}
-
-
-int findBodyEnd(const char * string, Range* r){
-    if (matchRegex(string, r, HTML_TAGS.body) != 0)
-       return 1;
-    r->start = (r->end -= 7);// strlen(</body>)
-    printf("found boday @ %d:%d\n%s", r->start, r->end,string);
-    return 0;
-}
-
-int findHeadEnd(const char * string, Range* r){
-    if (matchRegex(string, r, HTML_TAGS.head) != 0){
-       return 1;
-    }
-    r->start = (r->end -= 7);// strlen(</head>)
-    //printf("found match\n");
-    return 0;
-}
-
-int findLink(const char* string, Range* r){
-    static Range firstRun;
-    if ( matchRegex(string, &firstRun, HTML_TAGS.a) != 0 )
-        return 1;
-    if ( matchRegex(string + firstRun.start, r, HTML_ATTR.href) != 0)
-        return 1;
-    r->start += firstRun.start + 6; // strlen(href=")
-    r->end += firstRun.start;
-    return 0;
-}
-*/
 int matchRegexTag(const char* string, Range* r, Regex* rgx){
     int offset1 = 0, offset2 = 0, ec = 0;
     Range endTag, futureTag;
@@ -154,25 +96,25 @@ int matchRegexTag(const char* string, Range* r, Regex* rgx){
     if (ec != 0)
         return ec;
     offset2 += r->end;
-    ec = matchRegex_t(string, &endTag, rgx->rEnd); 
+    ec = matchRegex_t(string, &endTag, rgx->rEnd);
     if (ec != 0)
         return ec;
-    ec = matchRegex_t(string + offset2, &futureTag, rgx->rStart); 
-    if (ec != 0) 
+    ec = matchRegex_t(string + offset2, &futureTag, rgx->rStart);
+    if (ec != 0)
         goto done;
-    
+
     while (endTag.start+offset1  > futureTag.start+offset2){
         ec = matchRegex_t(string +(offset2 += futureTag.end),
                             &futureTag, rgx->rStart);
         ec = matchRegex_t(string + (offset1 += endTag.end),
-                                    &endTag, rgx->rEnd); 
+                                    &endTag, rgx->rEnd);
         if (ec != 0)
             return ec;
     }
     done:
     r->end = endTag.end + offset1;
     return 0;
-    
+
 }
 #if 0
 int main(int argc, char ** argv)

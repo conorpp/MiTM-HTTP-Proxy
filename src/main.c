@@ -2,13 +2,10 @@
     Server
 */
 #include "utils.h"
-#include "logger.h"
-#include "tcp.h"
 #include "http.h"
 #include "ssl.h"
 #include "regex.h"
 #include "string.h"
-#include "commandline.h"
 #include "proxy.h"
 
 int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*));
@@ -19,16 +16,12 @@ int replaceFunc(const char* string, Range* r){
     static int limit = -2;
     if (limit == -2)
         limit = Prox.options.count;
-   
     int offset = 0;
     if (Prox.match(string, r, Prox.regex) != 0)
         return -1; // no more matches!
-    if(0){
-        printf("replacing:\n");
-        fflush(stdout);
-        write(fileno(stdout), string + r->start, r->end-r->start);
-        printf("\n");
-    }
+
+    LogContent(LOG_DEBUG|LOG4, string + r->start, r->start - r->end);
+
     switch (Prox.options.position){
         case CL_BEFORE:
             offset = r->end - r->start;
@@ -58,7 +51,7 @@ int userEditPage(HttpResponse* res){
         return 0;
     }
     char *tmp = res->store->content;
-    
+
     // Replace with string
     if (Prox.replaceString != (char*)0){
         res->store->content = replaceAll(replaceFunc, res->store->content,
@@ -70,15 +63,15 @@ int userEditPage(HttpResponse* res){
     // replace with files
     printf("Prox files**: %x\n", (int)Prox.files);
     if (Prox.files != (char**)0)
-        res->store->content = insertFiles(replaceFunc, 
-            res->store->content, res->store->contentLength, 
+        res->store->content = insertFiles(replaceFunc,
+            res->store->content, res->store->contentLength,
             &res->store->contentLength, Prox.files, 1);
     if (tmp != (char*)0 && tmp != res->store->content) free(tmp);
     return 0;
 }
 
 int main(int argc, char *argv[]){
-    
+
     if (argc<2){
         Help();
         exit(1);
@@ -95,17 +88,17 @@ int main(int argc, char *argv[]){
     //generateRegexes();
 
     sockfd = Listen(NULL, Prox.port);
-    
+
     Log(LOG_DEBUG|LOG1,"Proxy listening on %s\n", Prox.port);
 #ifdef NOFORK
     Log(LOG_DEBUG|LOG3,"NOFORK\n");
 #endif
     while(1){
-       
+
         //TODO make a header/helper function for this
         slen = sizeof their_addr;
         newfd = accept(sockfd, (struct sockaddr *)&their_addr, &slen);
-        
+
         if (newfd == -1){
             perror("accept"); continue;
         }
@@ -134,7 +127,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     HttpWrap(&req, clientfd, HTTP_REQ);
 
     char line[10000];
-    
+
     while ((HttpRead(&req)) > 0){
         do{
             s = HttpParse(&req, &req.header, req.store);
@@ -149,7 +142,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
 
             }
         }while(HTTP_IS_PARSING(s));
-            
+
         if (s == E_finished){
             break;
         }
@@ -161,13 +154,13 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
         goto done;
     }
     Log(LOG_DEBUG|LOG1,"\n-%%- Request(%d) -%%-\n", clientfd);
-    
-    // Write the request 
+
+    // Write the request
     sprintf(line, "%s %s %s\r\n", req.method, req.path, req.protocol);
     Log(LOG_REQ_HEADER,"%s",line);
     HttpWrite(&res, line, strlen(line));
     Log(LOG_DEBUG|LOG1,"\n--%% writing headers\n");
-    
+
     writeHttpHeaders(&res, req.header);
     printHttpHeaders(&req.header, LOG_REQ_HEADER);
 
@@ -190,12 +183,12 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
         if (s == E_finished)
             break;
     }
-  
+
     // status
     sprintf(line, "%s %d %s\r\n", res.protocol, res.status, res.comment);
     HttpWrite(&req, line, strlen(line));
     Log(LOG_RES_HEADER,"%s", line);
- 
+
     HttpHeader* H = getHttpHeader(res.header, HTTPH_CT);
 
     // Decode gzip to get clear text
@@ -212,7 +205,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
             editCallback(&res);
         }
     }
-    
+
     if (res.store->contentLength){
         char num[12];
         sprintf(num,"%d", res.store->contentLength);
@@ -234,5 +227,3 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
 
     return 0;
 }
-
-

@@ -15,7 +15,7 @@ struct __LOGSETTINGS__{
 
 
 void Log(int flags, char* msg, ...);
-void LogContent(int flags, char* msg, int length);
+void LogContent(int flags, const char* msg, int length);
 
 #define GET_LOG_LEVEL(x) ((x) & 0x1f)
 #define LOG1 (1<<0)
@@ -26,10 +26,24 @@ void LogContent(int flags, char* msg, int length);
 #define LOG_DISABLED (1<<5)
 
 #define LOG_ALL (1<<6)
+
 #define LOG_REQ_DATA (1<<7)
 #define LOG_RES_DATA (1<<8)
 #define LOG_REQ_HEADER (1<<9)
 #define LOG_RES_HEADER (1<<10)
 #define LOG_DEBUG (1<<11)
+#define LOG_INFO (1<<12)
+
+static int LOG_OPTS[] = {
+    LOG_ALL,
+    LOG_REQ_DATA,
+    LOG_RES_DATA,
+    LOG_REQ_HEADER,
+    LOG_RES_HEADER,
+    LOG_DEBUG,
+    LOG_INFO,
+    0
+};
+
 
 #endif
