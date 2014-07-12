@@ -241,18 +241,28 @@ void addHttpHeader(HttpHeader** first, char* type, char* data){
     memmove((*tmp)->data, data, (*tmp)->length);
 }
 
-int deleteHttpHeader(HttpHeader** first, int type){
+// 1 is match, 0 no match
+static int itsAMatch(HttpHeader* h, char* strtype, int type){
+    if (strtype == (char*)0){
+        if (h->type == type)
+            return 1;
+    }else if (strcmp(h->header, strtype) == 0)
+        return 1;
+    return 0;
+}
+
+int deleteHttpHeader(HttpHeader** first, char* strtype, int type){
     if (*first == (HttpHeader*) 0)
         return -1;
     HttpHeader* tmp = *first;
     HttpHeader* prior = tmp;
-    if (tmp->type == type){
+    if (itsAMatch(tmp, strtype, type)){
         *first = (*first)->next;
         freeHttpHeader(&prior);
         return 0;
     }
     while(tmp != (HttpHeader*) 0){
-        if (tmp->type == type){
+        if (itsAMatch(tmp, strtype, type)){
            prior->next = tmp->next;
            freeHttpHeader(&tmp);
            return 0;

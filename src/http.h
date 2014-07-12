@@ -192,7 +192,8 @@ void addHttpHeader(HttpHeader** first, char* type, char* data);
 ///@return: 0 if a deletion was made, -1 if no deletion
 ///@param first: the first item in the linked list
 ///@param type: the type of header to delete
-int deleteHttpHeader(HttpHeader** first, int type);
+int deleteHttpHeader(HttpHeader** first, char* strtype, int type);
+
 
 // get item from linked list
 HttpHeader* getHttpHeader(HttpHeader* first, int type);

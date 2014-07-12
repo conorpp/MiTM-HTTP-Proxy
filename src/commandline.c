@@ -21,6 +21,12 @@ void Help(){
                 e.g. -matchtag h1 ",
         "   -matchattr <HTML tag>: Use a built in regex to match an entire HTML attribute and it's value\n\
                 e.g. -matchattr href ",
+        "   -host <hostname>: Set a hostname and edits will only be made to transactions with that host in the http header.\n"
+        "   --<add|replace|block>-headers <header-string>: alter or block server HTTP headers.\n\
+                e.g. --add-headers \"Set-Cookie: id=9999\" \"Accept-Language: en-US,en;q=0.5\"\n\
+                e.g. --replace-headers \"Last-Modified: Fri, 09 Aug 2013 23:54:35 GMT\"\n\
+                e.g. --block-headers \"X-XSS-Protection\" \"Content-Security-Policy\"\n"
+
         "   --save-client-data [file]: save data sent by client to file.",
         "   --save-server-data [file]: save data sent by server to file.\n\
                 A file only needs to be specified once. It will be used for both client and server.",
@@ -34,7 +40,8 @@ void Help(){
         "\0"
     };
     for(int i=0; lines[i][0]; i++ )
-        Log(LOG1, "%s\n", lines[i]);
+        //Log(LOG1, "%s\n", lines[i]);
+        printf("%s\n", lines[i]);
 }
 
 int parseArgs(int _argc, char* argv[], int* cur){
@@ -90,6 +97,7 @@ static int checkFile(char* filename, int kill){
 
 }
 void setProxSettings(int argc, char* argv[]){
+    printf("\n")
     static char* files[MAX_FILES];
     static int init = 0;
     if (!init++){
@@ -203,6 +211,44 @@ void setProxSettings(int argc, char* argv[]){
                 check(cur,argc,"Expecting a value for timeouts.");
                 Prox.options.timeout = atoi(argv[cur+1]);
             break;
+            case CL_HOST:
+                claimData=1;
+                check(cur,argc,"Expecting a hostname to compare with HTTP host.");
+                Prox.options.host = argv[cur+1];
+            break;
+            case CL_BLOCK_HEADERS:
+            case CL_REPLACE_HEADERS:
+            case CL_ADD_HEADERS:
+                // --block-headers \"X-XSS-Protection\nContent-Security-Policy\"
+                check(cur,argc,"Expecting an HTTP header");
+                if (isArg(argv[cur+1]))
+                    die("Expecting an HTTP header. Got %s", argv[cur+1]);
+                int offset = 1;
+                char* header;
+                // add each argument as a target header
+                while(!isArg((header = argv[cur+offset]))){
+                    if ( o == CL_ADD_HEADERS || o==CL_REPLACE_HEADERS){
+                        // Include data for adding or replacing target headers
+                        char* index = strstr(header, ":");
+                        if (index == (char*) 0 || (strlen(index) < 2))
+                            die("You need to provide data for each header you add or replace.");
+                        char *headertype = header;
+                        char *headerdata = index+1;
+                        *(index) = '\0';
+                        addTargetHeader(headertype, headerdata, o);
+                    }else{
+                        // don't care about data if your just blocking
+                        addTargetHeader(header, "\0", o);
+                    }
+                    claimData++;
+                    // break if reached end of args
+                    if (check(cur+offset, argc, (char*)0) != 0)
+                        break;
+                    offset++;
+                }
+
+
+            break;
             case CL_SAVE_SERVER:
             case CL_SAVE_CLIENT:
               saving = 1;
@@ -229,6 +275,7 @@ void setProxSettings(int argc, char* argv[]){
             case CL_RICKROLL:
                 scenarios |= o;
             break;
+
             case CL_NOTHING:
                 if (claimData-- <= 0){
                     Prox.targetHost = argv[cur];
@@ -266,7 +313,8 @@ void setProxSettings(int argc, char* argv[]){
         }
 
     }
-
+    Log(LOG_DEBUG|LOG1, "printing target headers \n");
+    printTargetHeaders();
     // Clear save header bits if REQ/RES is not indicated to be saved
     if ((Logger.outputFlags & LOG_REQ_HEADER) &&
         !(Logger.outputFlags & LOG_REQ_DATA))

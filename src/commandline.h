@@ -43,6 +43,14 @@ static struct _Arg_ CL_ARGS[] = {
     {"-matchtag", CL_TAG},
 #define CL_ATTR (1<<10)
     {"-matchattr", CL_ATTR},
+#define CL_HOST (19)
+    {"-host", CL_HOST},
+#define CL_ADD_HEADERS (1 << 18)
+    {"--add-headers", CL_ADD_HEADERS},
+#define CL_BLOCK_HEADERS (1 << 19)
+    {"--block-headers", CL_BLOCK_HEADERS},
+#define CL_REPLACE_HEADERS (1 << 20)
+    {"--replace-headers", CL_REPLACE_HEADERS},
 #define CL_SAVE_CLIENT (1<<11)
     {"--save-client-data", CL_SAVE_CLIENT},
 #define CL_SAVE_SERVER (1<<12)

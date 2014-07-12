@@ -215,31 +215,33 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
     sprintf(line, "%s %d %s\r\n", res.protocol, res.status, res.comment);
     HttpWrite(&req, line, strlen(line));
     Log(LOG_RES_HEADER,"%s", line);
+    if (isTargetServerHost(req.header)){
+        HttpHeader* H = getHttpHeader(res.header, HTTPH_CT);
 
-    HttpHeader* H = getHttpHeader(res.header, HTTPH_CT);
-
-    // Decode gzip to get clear text
-    if (H != (HttpHeader*) 0){
-        // todo: change to indexOf functions
-        if (strstr(H->data, "text/html")!= (char*)0){
-            H = getHttpHeader(res.header, HTTPH_C_ENCODING);
-            if(H != (HttpHeader*) 0){
-                if (strstr(H->data, "gzip") != (char*)0){
-                    decodeGzip(&res.store->content, &res.store->contentLength);
-                    deleteHttpHeader(&res.header, HTTPH_C_ENCODING);
+        // Decode gzip to get clear text
+        if (H != (HttpHeader*) 0){
+            // todo: change to indexOf functions
+            if (strstr(H->data, "text/html")!= (char*)0){
+                H = getHttpHeader(res.header, HTTPH_C_ENCODING);
+                if(H != (HttpHeader*) 0){
+                    if (strstr(H->data, "gzip") != (char*)0){
+                        decodeGzip(&res.store->content, &res.store->contentLength);
+                        deleteHttpHeader(&res.header, (char*) 0, HTTPH_C_ENCODING);
+                    }
                 }
+                editCallback(&res);
             }
-            editCallback(&res);
         }
+        proxyHeaders(&res.header);
     }
-
     if (res.store->contentLength){
         char num[12];
         sprintf(num,"%d", res.store->contentLength);
-        deleteHttpHeader(&res.header, HTTPH_CL);
-        deleteHttpHeader(&res.header, HTTPH_T_ENCODING);
+        deleteHttpHeader(&res.header, (char*) 0, HTTPH_CL);
+        deleteHttpHeader(&res.header, (char*) 0, HTTPH_T_ENCODING);
         addHttpHeader(&res.header,"Content-length", num);
     }
+
     // headers
     writeHttpHeaders(&req, res.header);
     printHttpHeaders(&res.header, LOG_RES_HEADER);
