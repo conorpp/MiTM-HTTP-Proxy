@@ -5,3 +5,5 @@
 void setupGravity();
 
 void setupRickRoll();
+
+void setupLogInfo();

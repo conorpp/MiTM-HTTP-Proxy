@@ -69,6 +69,8 @@ static struct _Arg_ CL_ARGS[] = {
     {"-gravity", CL_GRAVITY},
 #define CL_RICKROLL (1<<17)
     {"-rickroll", CL_RICKROLL},
+#define CL_STEALINFO (1<<21)
+    {"-loginfo", CL_STEALINFO},
     {"\0",0}
 };
 

@@ -21,7 +21,7 @@ void Help(){
                 e.g. -matchtag h1 ",
         "   -matchattr <HTML tag>: Use a built in regex to match an entire HTML attribute and it's value\n\
                 e.g. -matchattr href ",
-        "   -host <hostname>: Set a hostname and edits will only be made to transactions with that host in the http header.\n"
+        "   -host <hostname>: Set a hostname and edits will only be made to transactions with that host in the http header.",
         "   --<add|replace|block>-headers <header-string>: alter or block server HTTP headers.\n\
                 e.g. --add-headers \"Set-Cookie: id=9999\" \"Accept-Language: en-US,en;q=0.5\"\n\
                 e.g. --replace-headers \"Last-Modified: Fri, 09 Aug 2013 23:54:35 GMT\"\n\
@@ -34,13 +34,14 @@ void Help(){
         "   -ca <CA-file>: Provide a signed central authority certificate to use for MiTM SSL.",
         "   -pk <PK-file>: Provide a private key file for the signed CA file.",
         "   -timeout <number>: Provide a timeout for hangups on client and server transactions in seconds. Default is 10.",
-        "   -v <0-5>: Set the verbosity level from 0-5. 0 being the lowest. Default 1.",
-        "",
-        "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
-        "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
+        "   -v <0-5>: Set the verbosity level from 0-5. 0 being the lowest. Default 2.",
+        " ",
+        "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity.",
+        "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video.",
+        "   -loginfo: Prox will save any data the client sends to a file.",
         "\0"
     };
-    for(int i=0; lines[i][0]; i++ )
+    for(int i=0; lines[i][0] != '\0'; i++ )
         //Log(LOG1, "%s\n", lines[i]);
         printf("%s\n", lines[i]);
 }
@@ -319,7 +320,7 @@ void setProxSettings(int argc, char* argv[]){
         }
 
     }
-    printf("log level:%d\n", Logger.level);
+
     printTargetHeaders();
     // Clear save header bits if REQ/RES is not indicated to be saved
     if ((Logger.outputFlags & LOG_REQ_HEADER) &&

