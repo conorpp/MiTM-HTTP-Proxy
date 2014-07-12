@@ -9,20 +9,19 @@ static int getlength(char** cl){
 static void applySettings(char* cl[]){
     int l = getlength(cl);
     for(int i=0; i<l; i++)
-        cl[i] = strdup(cl[i]);
-    for(int i=0; i<l; i++)
-        printf("%s ", cl[i]);
-    printf("\n");
+        Log(LOG_INFO|LOG1, "%s ", cl[i]);
+    Log(LOG_INFO|LOG1,"\n");
     setProxSettings(l, cl);
-}   
+}
 
 void setupGravity(){
-    printf(" -- Setting up Gravity --\n");
+    Log(LOG_INFO|LOG1, " -- Setting up Gravity --\n");
     char *cl[] = {
-        "./Prox",
-        "-files", "data/gravityscript.html",
-        "-matchtag", "head",
-        "-append",
+        (char[]){"./Prox"},
+        (char[]){"-files"}, (char[]){"data/gravityscript.html"},
+        (char[]){"-matchtag"}, (char[]){"head"},
+        (char[]){"-append"},
+        (char[]){"-c"},(char[]){"1"},
         "\0"
     };
     applySettings(cl);
@@ -32,15 +31,14 @@ void setupGravity(){
 
 void setupRickRoll(){
 
-    printf(" -- Setting up Rickroll --\n");
+    Log(LOG_INFO|LOG1, " -- Setting up Rickroll --\n");
     char *cl[] = {
-        "./Prox",
-        "-string", "href=\"http://youtu.be/dQw4w9WgXcQ\"",
-        "-matchtag", "a",
-        "-matchattr", "href",
-        "-replace",
+        (char[]){"./Prox"},
+        (char[]){"-string"}, (char[]){"href=\"http://youtu.be/dQw4w9WgXcQ\""},
+        (char[]){"-matchtag"}, (char[]){"a"},
+        (char[]){"-matchattr"}, (char[]){"href"},
+        (char[]){"-replace"},
         "\0"
     };
     applySettings(cl);
 }
-
