@@ -3,7 +3,7 @@
 void die(const char *msg, ...){
     char diebuf[10000];
     va_list args;
-    vprintf( msg, args );
+    va_start( args, msg );
     vsprintf(diebuf, msg, args);
     va_end( args );
 
