@@ -3,22 +3,21 @@
 #ifndef _COMMANDLINE_H_
 #define _COMMANDLINE_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include "utils.h"
-#include "regex.h"
-#include "tcp.h"
-#include "proxy.h"
+#include "utils.h"    // utils
+#include "regex.h"    // Regexes
+#include "tcp.h"      // Check hostname
+#include "proxy.h"    // settings struct
 
 #define CL_VAL(x) (CL_ARGS[(x)].val)
 #define CL_NOTHING (99)
 
+// Pair string representation with a unique number
 struct _Arg_{
     char* str;
     int val;
 };
 
+// The arguments
 static struct _Arg_ CL_ARGS[] = {
 #define CL_PORT (1<<1)
     {"-p",CL_PORT},
@@ -59,12 +58,20 @@ static struct _Arg_ CL_ARGS[] = {
     {"\0",0}
 };
 
+// uses static variables to 1 arg per function call.
+///@return: the argument type or -1 when finished.
+///@param _argc: the number of arguments in argv.
+///@param argv: the arguments.
+///@param cur: this fills in with parseArgs's current index in argv.
 int parseArgs(int _argc, char* argv[], int* cur);
 
+// Print out the help text.
 void Help();
 
+// State machine that uses parseArgs to set Prox's settings.
 void setProxSettings(int argc, char* argv[]);
 
+// You can't specify more than 500 files to insert.
 #define MAX_FILES 500
 
 

@@ -1,7 +1,6 @@
-#include <stdio.h>
-#include "proxy.h"
-#include "commandline.h"
-#include "utils.h"
+#include "proxy.h"        // Settings
+#include "commandline.h"  // CLI arguments
+#include "utils.h"        // utils
 
 void setupGravity();
 

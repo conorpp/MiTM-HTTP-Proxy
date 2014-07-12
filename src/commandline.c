@@ -20,11 +20,12 @@ void Help(){
                 e.g. -matchtag h1 ",
         "   -matchattr <HTML tag>: Use a built in regex to match an entire HTML attribute and it's value\n\
                 e.g. -matchattr href ",
-        "   --save-client-data <file>: save data sent by client to file.",
-        "   --save-server-data <file>: save data sent by server to file.",
+        "   --save-client-data [file]: save data sent by client to file.",
+        "   --save-server-data [file]: save data sent by server to file.\n\
+                A file only needs to be specified once. It will be used for both client and server.",
         "   -h: include HTTP headers when saving data.",
-        "   -ca <CA file>: Provide a signed central authority certificate to use for MiTM SSL.",
-        "   -pk <PK file>: Provide a private key file for the signed CA file.",
+        "   -ca <CA-file>: Provide a signed central authority certificate to use for MiTM SSL.",
+        "   -pk <PK-file>: Provide a private key file for the signed CA file.",
         "",
         "   -gravity: Prox will automatically insert a JavaScript file into websites that gives them gravity."
         "   -rickroll: Prox will automatically replace all href links with URLS pointing to a Rickroll video."
@@ -65,24 +66,34 @@ static int isArg(char* str){
     }
     return 0;
 }
+// 0 is ok, 1 is fail
+static int check(int arg, int argc, char *msg){
 
-static void check(int arg, int argc, char *msg){
-    if (arg+1 >= argc)
-        die(msg);
+    if (arg+1 >= argc){
+        if (msg != (char*) 0) die(msg);
+        else return 1;
+    }
+    return 0;
 }
-static void checkFile(char* filename){
+// 0 is ok, 1 is fail
+static int checkFile(char* filename, int kill){
     FILE* f;
     if ( (f=fopen(filename, "r")) == (FILE*) 0){
-        die("Could not open %s\n", filename);
+        if (kill) die("Could not open %s\n", filename);
+        else return 1;
     }
+
     fclose(f);
+    return 0;
 
 }
 void setProxSettings(int argc, char* argv[]){
     static char* files[MAX_FILES];
     static int init = 0;
     if (!init++){
+        // initialize
         memset(&Prox, 0, sizeof(struct __SETTINGS__));
+        initLogger();
         Prox.options.position = CL_BEFORE;
         Prox.files = files;
         Prox.ssl.enabled++;
@@ -95,9 +106,11 @@ void setProxSettings(int argc, char* argv[]){
     }
     int o, cur;
     int claimData = 1;
+    int saving = 0;
     long long int scenarios = 0;
     char* tag = (char*) 0;
     char* attr = (char*) 0;
+    char* ofile = (char*) 0;
     while( (o=parseArgs(argc, argv, &cur)) != -1){
         switch(o){
             case CL_REGEX:
@@ -115,7 +128,7 @@ void setProxSettings(int argc, char* argv[]){
             break;
             case CL_STRING:
                 claimData = 1;
-                check(cur,argc,"Expecting a string");
+                check(cur,argc,"Expecting an insertion string");
 
                 if (Prox.filenum == 0)
                     Prox.replaceString = argv[cur+1];
@@ -124,15 +137,17 @@ void setProxSettings(int argc, char* argv[]){
             break;
             case CL_FILES:
                 check(cur,argc,"Expecting atleat one file name");
+                // normally files come in each arg in array
                 while((cur+1<argc) && !isArg(argv[++cur])){
                     Log(LOG4|LOG_DEBUG,"checking file %s\n", argv[cur]);
                     char* file = strtok (argv[cur]," ,");
                     file =argv[cur];
                     claimData++;
+                    // Go deeper in case comma seperated filenames in same arg.
                     while(file != (char*) 0){
                         if (++Prox.filenum >= MAX_FILES)
                             die("maximum file amount exceeded.");
-                        checkFile(file);
+                        checkFile(file,1);
                         *(files+Prox.filenum-1) = file;
                         file = strtok((char*)0, " ,");
                     }
@@ -152,13 +167,13 @@ void setProxSettings(int argc, char* argv[]){
             case CL_CERT_FILE:
                 claimData=1;
                 check(cur,argc,"Expecting signed central authority certificate filename.");
-                checkFile(argv[cur+1]);
+                checkFile(argv[cur+1], 1);
                 Prox.ssl.certfile = argv[cur+1];
             break;
             case CL_PRIV_FILE:
                 claimData=1;
                 check(cur,argc,"Expecting private key filename.");
-                checkFile(argv[cur+1]);
+                checkFile(argv[cur+1], 1);
                 Prox.ssl.privfile = argv[cur+1];
             break;
             case CL_TAG:
@@ -178,14 +193,27 @@ void setProxSettings(int argc, char* argv[]){
                 check(cur,argc,"Expecting a number for limiting insertions.");
                 Prox.options.count = atoi(argv[cur+1]);
             break;
-            case CL_SAVE_CLIENT:
-                Prox.options.saveClient++;
-            break;
             case CL_SAVE_SERVER:
-                Prox.options.saveServer++;
+            case CL_SAVE_CLIENT:
+              saving = 1;
+              // grab a filename if the user supplied one.
+              if (check(cur, argc, (char*) 0) == 0)
+                if (!isArg(argv[cur+1])){
+                  Logger.outputFlags |= LOG_REQ_DATA;
+                  ofile = (argv[cur + 1]);
+                }
+              switch(o){
+                case CL_SAVE_SERVER:
+                    Logger.outputFlags |= LOG_RES_DATA;
+                break;
+                case CL_SAVE_CLIENT:
+                    Logger.outputFlags |= LOG_REQ_DATA;
+                break;
+              }
             break;
             case CL_SAVE_HEADERS:
-                Prox.options.saveHeaders++;
+                Logger.outputFlags |= LOG_RES_HEADER;
+                Logger.outputFlags |= LOG_REQ_HEADER;
             break;
             case CL_GRAVITY:
             case CL_RICKROLL:
@@ -203,32 +231,73 @@ void setProxSettings(int argc, char* argv[]){
     if ((ret=hostIsAlive(Prox.targetHost)) != 0){
         die("Could not find host \"%s\": %s\n", Prox.targetHost, gai_strerror(ret));
     }
+
+    // Compile user supplied regex string.
     if (Prox.regexString != (char* )0)
         Prox.options.offset = strlen(Prox.regexString);
     if (Prox.options.findTag || Prox.options.findAttr){
+        // Free pre-existing regex if there is one
         if (Prox.regex != (Regex*)0){
             Log(LOG_INFO|LOG1, "warning: supplied regex string is being \
             ignored because an HTML element is specified.\n");
             freeRegex(Prox.regex);
         }
+        // Compile special tag finding regex
         if (Prox.options.findTag && !Prox.options.findAttr){
             Prox.regex = compileRegexTag(tag);
             Prox.match = matchRegexTag;
-            Prox.options.offset += 3;
+            Prox.options.offset += 3;  // length of </>
         }
+        // Compile special tag attr regex
         else if(Prox.options.findAttr){
            Prox.regex = compileRegexAttr(attr, tag);
-           Prox.options.offset += 1;
+           Prox.options.offset += 1;  // length of "
         }
 
     }
 
+    // Clear save header bits if REQ/RES is not indicated to be saved
+    if ((Logger.outputFlags & LOG_REQ_HEADER) &&
+        !(Logger.outputFlags & LOG_REQ_DATA))
+      Logger.outputFlags &= (~LOG_REQ_HEADER);
+
+    if ((Logger.outputFlags & LOG_RES_HEADER) &&
+        !(Logger.outputFlags & LOG_RES_DATA))
+      Logger.outputFlags &= (~LOG_RES_HEADER);
+
+    // Close any old outfiles
+    if (Logger.output != (FILE*) 0){
+      fclose(Logger.output);
+      Logger.output = (FILE*) 0;
+    }
+    // Open user specified file for output
+    if (ofile != (char*) 0)
+      Logger.output = fopen(ofile, "w");
+    else if (saving){
+      // Find a default file to use for output instead
+      char filename[100];
+      sprintf(filename, "prox.log");
+      int num = 1;
+      while(checkFile(filename, 0) == 0){
+        sprintf(filename, "prox%d.log", num++);
+      }
+      Log (LOG_INFO|LOG1, "Using output file %s\n", filename);
+      Logger.output = fopen(filename, "w");
+    }
+    // Store a file descriptor for the file stream.
+    if (Logger.output != (FILE*) 0){
+      Logger.outputfd = fileno(Logger.output);
+    }
+    // Reset the arg parser
     parseArgs(-1, NULL, NULL);
+
+    // Apply any scenarios specified
     if (scenarios & CL_GRAVITY)
         setupGravity();
     else if(scenarios & CL_RICKROLL)
         setupRickRoll();
 
+    /// Debug logging
     int flag = LOG_DEBUG|LOG4;
     Log(flag, "target: %s\n", Prox.targetHost);
     Log(flag, "regex: %s\n", Prox.regexString);

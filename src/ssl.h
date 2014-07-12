@@ -4,10 +4,9 @@
 #ifndef SSL_UTILS_H
 #define SSL_UTILS_H
 
-#include <stdlib.h>
-#include <openssl/rand.h>
-#include <openssl/ssl.h>
-#include <openssl/err.h>
+#include <openssl/rand.h>   // openssl
+#include <openssl/ssl.h>    // openssl
+#include <openssl/err.h>    // openssl
 
 #include "utils.h"
 
@@ -30,14 +29,14 @@ void SSLWrap(void *http, int flags);
 ///@param certFile: the RSA signed CA file.
 ///@param privKeyFile: the private key for CA file.
 void SSL_Init(char* certFile, char* privKeyFile);
-    
+
 //Takes a already connected TCP file descriptor
 //and wraps it in SSL.  For starting SSL
 //handshake with server.
 ///@param sockfd the file descriptor
 SSL_Connection* SSL_Connect(int sockfd);
 
-//Takes a connected file descriptor 
+//Takes a connected file descriptor
 //and wraps it in SSL.  For listening
 //for a SSL handshake from a client.
 SSL_Connection* SSL_Accept(int sockfd);
@@ -48,13 +47,3 @@ void SSL_Close(SSL_Connection* sslcon);
 
 
 #endif
-
-
-
-
-
-
-
-
-
-

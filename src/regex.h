@@ -1,13 +1,8 @@
 /* Regex functionality biased for HTML parsing
 * */
 
-#include <stdlib.h>
-#include <stdio.h>
-#include <string.h>
-#include <unistd.h>
-#include <fcntl.h>
-#include <regex.h>
-#include "utils.h"
+#include <regex.h>  // regexes
+#include "utils.h"  // utils
 
 #ifndef REGEX_H_
 #define REGEX_H_

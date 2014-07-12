@@ -157,7 +157,7 @@ int proxyHttp(int clientfd, int (*editCallback)(HttpResponse*)){
 
     // Write the request
     sprintf(line, "%s %s %s\r\n", req.method, req.path, req.protocol);
-    Log(LOG_REQ_HEADER,"%s",line);
+    Log(LOG_REQ_HEADER,line);
     HttpWrite(&res, line, strlen(line));
     Log(LOG_DEBUG|LOG1,"\n--%% writing headers\n");
 

@@ -4,13 +4,12 @@
 #ifndef _PROXY_H_
 #define _PROXY_H_
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <zlib.h>
-#include "utils.h"
-#include "regex.h"
-#include "commandline.h"    // commandline specific to application
+#include <stdlib.h>  // malloc/free
+#include <string.h>  // mem*
+#include <zlib.h>    // Gzip encoding/decoding
+#include "utils.h"   // utils
+#include "regex.h"   // Regex type
+#include "commandline.h"  // commandline args/settings specific to application
 
 
 struct __SETTINGS__{

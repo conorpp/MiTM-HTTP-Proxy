@@ -4,10 +4,9 @@
 #ifndef HTTP_H
 #define HTTP_H
 
-#include "utils.h"
-#include "logger.h"
-#include "tcp.h"
-#include "ssl.h"
+#include "utils.h"    // utils
+#include "tcp.h"      // TCP connections
+#include "ssl.h"      // SSL
 
 
 typedef struct _HttpHeader{
@@ -78,8 +77,8 @@ typedef struct{
     HttpStore* store;
 } HttpTransaction;
 
-// Possible states for an HttpStore 
-enum HttpState{ 
+// Possible states for an HttpStore
+enum HttpState{
     E_readMethod     =  0,      // reading first line of Http request.
     E_reReadMethod   = (1),     // reading first line of Https request.
     E_readStatus     = (1<<1),  // reading first line Http response.
@@ -94,7 +93,7 @@ enum HttpState{
     E_reset          = (1<<10)   // all data has been processed.
 };
 
-// Indicate if the data in the HttpStore has all been parsed 
+// Indicate if the data in the HttpStore has all been parsed
 // or if it still has some left.
 #define HTTP_IS_PARSING(x) \
     (((x)&4)|((x)&8)|((x)&32)|((x)&64) )
@@ -106,7 +105,7 @@ enum HttpState{
 #define HTTP_RES (1 << 1)       // Http transaction is a response
 #define HTTPS (1 << 2)          // Http will occur over ssl
 
-#define IS_HTTP_REQ(x)  ((x)&0x1) 
+#define IS_HTTP_REQ(x)  ((x)&0x1)
 #define IS_HTTP_RES(x)  ((x)&0x2)
 #define IS_HTTPS(x)     ((x)&0x4)
 HttpStore* newHttpStore(int flags);
@@ -125,7 +124,7 @@ void freeHttpStore(HttpStore* S);
 ///@param http: a Http Request or Response to read from
 int HttpRead(void* http);
 
-// Write bytes from buffer to a HTTP request or response 
+// Write bytes from buffer to a HTTP request or response
 ///@param http: the http request (client) or response (server)
 ///             to write to.
 ///@param buffer: pointer to bytes to be written.
@@ -138,7 +137,7 @@ void HttpWrite(void* http, void* buffer, int num);
 ///@param length: amount of data to write from buf
 //void saveHttpContent(HttpStore* store, char* buf, int length);
 
-// Reads a chunk from buffer 
+// Reads a chunk from buffer
 ///@return: the number of bytes read.  Will return -1
 ///         if more data needs to be read to read the whole
 ///         chunk. Returns 0 if last chunk.
@@ -158,7 +157,7 @@ void saveHttpHeaders(HttpStore* S);
 void writeHttpHeaders(void *http, HttpHeader* first);
 
 
-// Print out the headers to stdout of a header 
+// Print out the headers to stdout of a header
 // linked list for debugging.
 ///@param header: the first header in linked list.
 void printHttpHeaders(HttpHeader **header, int flags);

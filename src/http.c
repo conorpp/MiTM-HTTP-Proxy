@@ -26,7 +26,7 @@ int HttpRead(void* http){
 void HttpWrite(void* http, void* buffer, int num){
     int ec=0;
     HttpTransaction* T = (HttpTransaction*) http;
-    
+
     if (T->is_ssl){
         while( (ec += SSL_write(T->SSL->socket, buffer, num))<num);
     }
@@ -35,14 +35,14 @@ void HttpWrite(void* http, void* buffer, int num){
 
     if (ec < 0)
         die("HttpWrite: write or SSL_write failed.");
-   
+
 }
 
 
 void saveHttpContent(HttpStore* httpStore, char* buf, int length){
     while(httpStore->contentSpace - httpStore->contentOffset < length){
         Log(LOG_DEBUG|LOG2,"---allocating x4 space for chunk");
-        httpStore->content = realloc(httpStore->content, 
+        httpStore->content = realloc(httpStore->content,
                 (httpStore->contentSpace*=4));
         Log(LOG_DEBUG|LOG2," (%d)\n", httpStore->contentSpace);
     }
@@ -53,19 +53,19 @@ void saveHttpContent(HttpStore* httpStore, char* buf, int length){
 
 int readChunk(HttpStore* httpStore, char* buf){
     int length;
-    
+
     char *newline = strchr(buf, '\n');
     if ( sscanf(buf,"%x", &length) == 1){
         if (httpStore->offset + length > httpStore->length){
             Log(LOG_DEBUG|LOG2,
             "-- not enough has been read into the buffer for length %d\n",
                 length);
-            
+
             return -1;
         }
         saveHttpContent(httpStore, newline+1, length);
         httpStore->contentLength += length;
-        
+
         if (length) return length + newline + 3- buf;
         else return 0;
     }
@@ -76,7 +76,7 @@ int readChunk(HttpStore* httpStore, char* buf){
 }
 
 void dumpStore(HttpStore* http_store){
-    Log(LOG_DEBUG|LOG3,"+====Dumping Store======+\n"); 
+    Log(LOG_DEBUG|LOG3,"+====Dumping Store======+\n");
     char* buf = malloc(http_store->length+1);
     memmove(buf, http_store->buf, http_store->length);
     buf[http_store->length] = '\0';
@@ -108,7 +108,7 @@ HttpStore* newHttpStore(int flags){
     S->content = malloc(STORE_SIZE);
     S->size = STORE_SIZE;
     S->contentSpace = STORE_SIZE;
-    
+
     S->dynamicContent = 1;
     return S;
 }
@@ -126,7 +126,7 @@ void freeHttpStore(HttpStore* S){
 // Resets the state of the http transaction
 // so it'll reparse the data.  good for when the data
 // hasn't all been read in yet.
-void HttpRewind(void *http, int flags){ 
+void HttpRewind(void *http, int flags){
     Log(LOG_DEBUG|LOG3,"---REWINDING\n");
 
     HttpTransaction* T = (HttpTransaction*) http;
@@ -144,7 +144,7 @@ void writeHttpHeaders(void *http, HttpHeader* first){
     for(H=first; H != (HttpHeader*)0; H=H->next){
     //    switch(H->type){
     //        case -1://Http_A_ENCODING:
-    //            sprintf(HTTP_BUF, "%s: deflate\r\n", H->header);    
+    //            sprintf(HTTP_BUF, "%s: deflate\r\n", H->header);
     //        break;
     //        default:
                 sprintf(HTTP_BUF, "%s: %s\r\n", H->header, H->data);
@@ -159,8 +159,8 @@ void writeHttpHeaders(void *http, HttpHeader* first){
 
 void printHttpHeaders(HttpHeader **header, int flags){
     HttpHeader** tmp = header;
-    Log(flags,"\n");
     while(*tmp != (HttpHeader*)0){
+        Log(0,"printing %s: %s to %d\n", (*tmp)->header, (*tmp)->data, (int)Logger.output);
         Log(flags,"%s: %s\n", (*tmp)->header, (*tmp)->data);
         tmp = &((*tmp)->next);
     }
@@ -175,7 +175,7 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
             strncasecmp(httpbuf, "\r\n", 2) == 0 ||
             strncasecmp(httpbuf, "\r\n\r\n", 4) == 0 ||
             strncasecmp(httpbuf, "\n\n", 2) == 0 ||
-            strncasecmp(httpbuf, "\n", 1) == 0 
+            strncasecmp(httpbuf, "\n", 1) == 0
        ){
         return 0;
     }
@@ -188,7 +188,7 @@ int HttpParseHeader(HttpHeader** header, char* httpbuf){
     }else{
             Log(LOG_DEBUG|LOG1,"--Warning: bad http header ending\n");
             printHttpHeaders(header, LOG_DEBUG|LOG1);
-        
+
             //printf("--bytes: ");
             //for(int i=0; i<10; i++)
             //    printf(" %x", *httpbuf++);
@@ -317,7 +317,7 @@ int HttpParseMethod(HttpRequest* req, const char* str){
     if((sscanf(str, "%100[^ ] %10000[^ ] %100[^ \r\n]", method, url, protocol))!=3){
         Log(LOG_DEBUG|LOG1,"%s\n\n",str);
         die("invalid Http request");
-        
+
     }
     req->method = (char *) malloc( (size = strlen(method)+1) );
     memmove(req->method, method, size);
@@ -356,7 +356,7 @@ int HttpParseStatus(HttpResponse* res, const char* str){
 
     int size, total = 0;
     if(sscanf(str, "%100s %d %1000[^\r\n]", protocol, &res->status, comment)!=3){
-       Log(LOG_DEBUG|LOG1,"%s\n",str); 
+       Log(LOG_DEBUG|LOG1,"%s\n",str);
         die("invalid Http response");
     }
     res->comment = (char *) malloc( (size = strlen(comment)+1) );
@@ -374,12 +374,12 @@ void parseURL(const char* url, char** host, char** path, int* port, int* ssl){
 
     int offset = 0;
     int size;
-    
+
     if (strncasecmp(url, "http://", (offset=7)) == 0)
         *ssl = 0;
     else if (strncasecmp(url, "https://", (offset=8)) == 0)
         *ssl = 1;
-    else 
+    else
         offset = 0;
     if (sscanf(&url[offset], "%[^/:]", HTTP_BUF) != 1){
         memmove(HTTP_BUF, url, strlen(url)+1);
@@ -410,7 +410,7 @@ void freeURL(char* host, char* path){
 }
 
 void freeHttpRequest(HttpRequest* req){
-    
+
     if (req->method != (char*) 0)
         free(req->method);
     if (req->url != (char*) 0)
@@ -443,7 +443,7 @@ void freeHttpResponse(HttpResponse* res){
 int parseHttpHeaders(HttpHeader** header, HttpStore* http_store){
     char* httpbuf = http_store->buf + http_store->offset;
     int l = 0;
-    http_store->headerLength = 0; 
+    http_store->headerLength = 0;
     // Parse all available headers.
     while((l = HttpParseHeader(header, httpbuf)) > 0){
         if (http_store->offset > http_store->length){
@@ -480,7 +480,7 @@ int parseHttpContent(HttpStore* http_store){
         http_store->offset -= l;
 
     Log(LOG_DEBUG|LOG2,"reading content %d / %d\n",
-            http_store->length - http_store->offset, 
+            http_store->length - http_store->offset,
             http_store->contentLength );
     // Check if the content length has been met.
     if (http_store->length - http_store->offset >= http_store->contentLength){
@@ -500,7 +500,7 @@ int parseHttpChunks(HttpStore* http_store){
         httpbuf += l;
         Log(LOG_DEBUG|LOG3,"got %d chunks\n",l);
     }
-    return l;    
+    return l;
 }
 
 int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
@@ -514,12 +514,12 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
         case E_readMethod:
         case E_readStatus:
             if (http_store->state == E_readStatus)
-                http_store->offset = 
+                http_store->offset =
                     HttpParseStatus((HttpResponse*)http, httpbuf);
             else
-                http_store->offset = 
+                http_store->offset =
                     HttpParseMethod((HttpRequest*)http, httpbuf);
-            
+
             //http_store->headers = httpbuf + http_store->offset;
             if (http_store->state == E_readMethod)
                 return (http_store->state = E_connect);
@@ -544,21 +544,21 @@ int HttpParse(void* http, HttpHeader** header, HttpStore *http_store){
                 // Not all the headers are present?
                 Log(LOG_DEBUG|LOG2,"---Reading more of header\n");
                 dumpStore(http_store);
-                http_store->state = E_reset;  
+                http_store->state = E_reset;
             }
         break;
         // Read in the content if its not chunked
         case E_continue:
         case E_readContent:
-            
+
             if ( parseHttpContent(http_store) == 0)
                 http_store->state = E_finished;
             else    // More data must be read in.
                 http_store->state = E_continue;
-        
+
         break;
         // Read in chunked content.
-        case E_readMoreChunks: 
+        case E_readMoreChunks:
         case E_readChunks:
             if (parseHttpChunks(http_store) == 0)
                 http_store->state = E_finished;

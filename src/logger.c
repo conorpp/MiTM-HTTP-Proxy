@@ -15,13 +15,25 @@ void Log(int flags, char* msg, ...){
     if (GET_LOG_LEVEL(flags) > Logger.level)
         return;
 
+    int log_file = (isLoggable(flags, Logger.outputFlags)&&
+                    Logger.output != (FILE*)0) ? 1 : 0;
     va_list args;
+    va_list args2;
+    int copied = 0;
     va_start( args, msg );
-    if (isLoggable(flags, Logger.logFlags))
+    if (isLoggable(flags, Logger.logFlags)){
+        if (log_file){
+          va_copy(args2, args);
+          copied = 1;
+        }
         vprintf( msg, args );
-    if (isLoggable(flags, Logger.outputFlags)&&
-        Logger.output != (FILE*)0)
-        vfprintf(Logger.output, msg, args);
+    }
+    if (log_file){
+        if (!copied)
+          va_copy(args2, args);
+        printf("logging %s to %d\n", msg, (int) Logger.output);
+        vfprintf(Logger.output, msg, args2);
+    }
     va_end( args );
 }
 
@@ -32,5 +44,10 @@ void LogContent(int flags, const char* msg, int length){
     Log(flags,"%s", tmp);
     if (tmp != (char*)0)
         free(tmp);
+}
 
+void initLogger(){
+  memset(&Logger, 0, sizeof(struct __LOGSETTINGS__));
+  Logger.level = LOG2;
+  Logger.logFlags |= LOG_ALL;
 }

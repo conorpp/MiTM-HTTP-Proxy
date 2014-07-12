@@ -1,9 +1,8 @@
 /* Additional string functionality
 * */
 
-#include <string.h>
-#include <stdio.h>
-#include "regex.h"
+#include <string.h>    // strings
+#include "regex.h"     // regexes
 
 #ifndef _STRING_H_
 #define _STRING_H_
