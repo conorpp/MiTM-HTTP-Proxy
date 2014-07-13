@@ -3,8 +3,9 @@
 CC=clang
 CFLAGS=-c -Wall
 
-LFLAGS=thirdparty/libnet/libnet.a thirdparty/pcap/libpcap.a
 
+LIBLOC=thirdparty/lib/
+LIBS=$(LIBLOC)libnet.a $(LIBLOC)libpcap.a
 INCLUDE=-I thirdparty
 
 EXE=main
@@ -12,7 +13,7 @@ EXE=main
 all: clean compile
 
 compile: main.o
-	$(CC) $^ $(LFLAGS) -o $(EXE)
+	$(CC) $^ $(LIBS) -o $(EXE)
 
 %.o: %.c
 	$(CC) $(CFLAGS) $(INCLUDE) $^ -o $@
