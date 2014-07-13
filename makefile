@@ -1,48 +1,51 @@
 
-
-#Compiling/linking
 CC=clang
-CFLAGS=-c -Wall
-LFLAGS=-lssl -lcrypto -lz
+CFLAGS=-c -Wall -fPIC
 
-#Output executable name
-EXE=proxy
+BuildDir=build
+SrcDir=src
 
-#Obj files, build location
-OBJS=utils.o tcp.o http.o main.o ssl.o string.o \
-     regex.o proxy.o commandline.o scenarios.o logger.o
-OBJ_DIR=build
-OBJS_OUTPUT=$(addprefix $(OBJ_DIR)/,$(OBJS))
+EXE=Prox
 
-#Source file location
-SRC_DIR=src
+#utils
 
-all: $(OBJ_DIR) clean main
+# Proxy
+ProxyName=proxy
+ProxyDir=$(SrcDir)/$(ProxyName)
+ProxyBuildDir=$(ProxyDir)/$(BuildDir)
+ProxySO=$(ProxyBuildDir)/proxy.so
 
-main: $(OBJS_OUTPUT)
-	$(CC) $(LFLAGS) $^ -o $(EXE)
+# Utils
+UtilsName=utils
+UtilsDir=$(SrcDir)/$(UtilsName)
+UtilsBuildDir=$(UtilsDir)/$(BuildDir)
+UtilsSO=$(UtilsBuildDir)/utils.so
 
-$(OBJ_DIR)/%.o: $(SRC_DIR)/%.c
-	$(CC) $(CFLAGS) $< -o $@
+export
 
-clean:
-	rm -rf $(OBJ_DIR)/*.o $(EXE)
+all: $(EXE)
 
-nologs:
-	rm -rf *.log src/*.log build/*.log
+$(EXE): $(ProxySO) $(UtilsSO)
+	$(CC) $^ -o $(EXE)
 
-$(OBJ_DIR):
+$(ProxySO): $(ProxyBuildDir)
+	@make -f $(ProxyDir)/makefile
+
+$(UtilsSO): $(UtilsBuildDir)
+	@make -f $(UtilsDir)/makefile
+
+clean: clean$(ProxyName) clean$(UtilsName)
+	rm $(EXE)
+
+clean$(ProxyName):
+	@make -f $(ProxyDir)/makefile clean
+
+clean$(UtilsName):
+	@make -f $(UtilsDir)/makefile clean
+
+$(SrcDir)/%/$(BuildDir):
 	mkdir $@
 
-run:
-	./proxy -p 9999 -ca data/cert.pem -pk data/privkey.pem
 
-$(EXE): clean main run
 
-$(EXE)D: debug $(EXE)
 
-debug:
-	$(eval CFLAGS += -DNOFORK=1)
-
-#run: proxy
-#    ./proxy 9999 cert.pem privkey.pem
