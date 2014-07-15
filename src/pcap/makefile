@@ -5,8 +5,8 @@ CFLAGS=-c -Wall
 
 
 LIBLOC=thirdparty/lib/
-LIBS=$(LIBLOC)libnet.a $(LIBLOC)libpcap.a
-INCLUDE=-I thirdparty
+LIBS=$(LIBLOC)libnet.a $(LIBLOC)libpcap.a ../utils/build/utils.so
+INCLUDE=-I thirdparty -I ../utils
 
 EXE=main
 
