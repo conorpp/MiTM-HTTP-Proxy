@@ -7,9 +7,9 @@
 #include <string.h>         //memset, memmove, str functions
 #include <netdb.h>          // addrinfo misc
 #include <unistd.h>         // read, write, close, fork
-
+#include <netinet/in.h>     // ntohl, etc.
+#include <arpa/inet.h>      // inet_aton
 #include "utils.h"
-
 // looks up a host and fills addrinfo res
 // with tcp addr/port/protocol/family options
 // Be sure to free res when finished.
@@ -29,5 +29,10 @@ int Connect(char *hostname, int port);
 /// Returns a gai_error otherwise.
 int hostIsAlive(char* host);
 
+// Get the integer representation of 
+// a IP address in . notation
+///@return the integer IP
+///@param ip: the . notation ip address
+unsigned int getIpInt(char* ip);
 
 #endif

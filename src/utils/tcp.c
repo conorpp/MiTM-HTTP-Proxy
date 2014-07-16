@@ -90,3 +90,11 @@ int hostIsAlive(char* host){
     }
     return ret;
 }
+
+
+unsigned int getIpInt(char* ip){
+    struct in_addr addr;
+    inet_aton(ip, &addr);
+    return addr.s_addr;
+}
+
