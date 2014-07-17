@@ -11,6 +11,7 @@
 struct{
     char* dev;
     libnet_t *arpMachine;
+    libnet_t *ethMachine;
     uint8_t* hostHwAddr;
     uint8_t* spoofedHwAddr;
     uint32_t hostIp;

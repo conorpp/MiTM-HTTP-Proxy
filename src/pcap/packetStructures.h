@@ -29,5 +29,27 @@ struct arp_h{
     uint32_t netdst;       // 24 : 4
 };
 
+#define IP4_H_SIZE 20
+struct ip4_h{
+    uint8_t version:4;
+    uint8_t Headerlength:4;
+    uint8_t dscp:6;
+    uint8_t ecn:2;
+    uint16_t length;
+    uint16_t id;
+    uint16_t flags:3;
+    uint16_t offset:13;
+    uint8_t ttl;
+    uint8_t protocol;
+    uint16_t chksum;
+    uint32_t srcIp;
+    uint32_t dstIp;
+    // optional header
+};
+
+
+
 
 #endif
+
+

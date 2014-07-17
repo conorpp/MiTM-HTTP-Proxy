@@ -67,3 +67,48 @@ void sendArp(int type, uint32_t ipsrc, uint8_t* hwsrc, uint32_t ipdst, uint8_t* 
 
 
 }
+
+void sendEth(const uint8_t *dst, const uint8_t* src, uint16_t type,
+                const uint8_t *payload, uint32_t payload_s ){
+    static libnet_ptag_t t = 0;
+    libnet_t* l = Settings.ethMachine;
+    int c;
+    uint8_t *packet;
+    uint32_t packet_s;
+    
+    if (t==0){
+        t=libnet_build_ethernet(  dst, src, type, 
+                            payload, payload_s,
+                            l, 0);
+    }else{
+        libnet_build_ethernet(  dst, src, type, 
+                payload, payload_s,
+                l, t);
+    }
+    if (t == -1){
+        fprintf(stderr, "Can't build ethernet header: %s\n",
+                libnet_geterror(l));
+        return;
+    }
+
+
+   // if (libnet_adv_cull_packet(l, &packet, &packet_s) == -1){
+   //     fprintf(stderr, "%s", libnet_geterror(l));
+   // }
+   // else{
+   //     fprintf(stdout, "packet size: %d\n", packet_s);
+   //     libnet_adv_free_packet(l, packet);
+   // }
+
+    c = libnet_write(l);
+    if (c == -1){
+        fprintf(stderr, "Write error: %s\n", libnet_geterror(l));
+    }
+    else{
+        fprintf(stdout, "Wrote %d byte Eth packet\n", c);
+    }
+
+
+}
+
+

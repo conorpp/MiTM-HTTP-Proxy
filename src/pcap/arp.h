@@ -19,5 +19,7 @@ void sendArp(int type, uint32_t ipsrc, uint8_t* hwsrc, uint32_t ipdst, uint8_t* 
 int arpPoison(char* ipTarget, char* ipGateway, uint8_t* targetHwAddr);
 
 
-
+void sendEth(const uint8_t *dst, const uint8_t* src, uint16_t type,
+                const uint8_t *payload, uint32_t payload_s );
+ 
 #endif
