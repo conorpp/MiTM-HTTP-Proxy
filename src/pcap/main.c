@@ -31,9 +31,10 @@ void printHwAddr(uint8_t* hw){
 }
 
 int logTcp(char* ip, uint8_t* hwAddr){
-    char filter[60];
+    char filter[160];
     // TODO finish this
-    sprintf(filter, "ether[6:4] == 0x%x%x%x%x && ether[10:2] == 0x%x%x", 
+    sprintf(filter, "(ether[6:4] == 0x%x%x%x%x && ether[10:2] == 0x%x%x)"
+                    "||(ether[])", 
         hwAddr[0], hwAddr[1], hwAddr[2], hwAddr[3], hwAddr[4], hwAddr[5]);
     printf("tcp filter: %s\n",filter);
 
@@ -126,14 +127,19 @@ int main(int argc, char* argv[]){
     uint8_t hwspoof[] = {0xca,0xfe,0xba,0xaa,0xbe,0x0};
     uint8_t targetHwAddr[6];
     Settings.spoofedHwAddr = hwspoof;
-   if (Settings.arpMachine == NULL){
+    if (Settings.arpMachine == NULL){
         fprintf(stderr, "fail:%s\n", ERRBUF);
         exit(EXIT_FAILURE);
     }
     int ec;
-    ec = arpPoison(argv[2], argv[3], targetHwAddr);
-    if (ec)
-        goto done;
+    printf("poisoning %s\n", argv[3]);
+    //ec = arpPoison(argv[3], argv[2], targetHwAddr);
+    //if (ec)
+    //    goto done;
+    //printf("poisoning %s\n", argv[2]);
+    //ec = arpPoison(argv[2], argv[3], targetHwAddr);
+    //if (ec)
+    //    goto done;
     logTcp(argv[2], targetHwAddr);
     done:
     libnet_destroy(Settings.arpMachine);

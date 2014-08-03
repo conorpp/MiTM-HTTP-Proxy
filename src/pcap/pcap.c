@@ -37,14 +37,17 @@ pcap_t* setPromiscuous(char* device, char* filter){
 int getMacAddress(char* ip, uint8_t* hwbuf){
     static uint8_t hwb[] = {0xff,0xff,0xff,0xff,0xff,0xff};
     struct pcap_pkthdr header;  /* The header that pcap gives us */
+    memset(&header,0,sizeof(struct pcap_pkthdr));  /* The header that pcap gives us */
     const u_char *packet;       /* The actual packet */
     char filter_exp[60];
 
     sprintf(filter_exp, "arp[14:4] == %u", ntohl(getIpInt(ip)));
+    printf("%s\n", filter_exp);
 
     pcap_t* handle = setPromiscuous(Settings.dev, filter_exp);
     sendArp(ARPOP_REQUEST, Settings.hostIp, Settings.hostHwAddr, getIpInt(ip), hwb);
-    packet = pcap_next(handle, &header);
+    while(!header.len)
+        packet = pcap_next(handle, &header);
 
     if (header.len < (ARP_H_SIZE+ETHER_H_SIZE)){
         printf("received invalid packet of length %d/%d.\n", header.len, ARP_H_SIZE+ETHER_H_SIZE);
