@@ -123,11 +123,11 @@ void addIPSocket(IPSocketList* listheader, IPSocket* ipsock){
         listheader->maxfd = ipsock->sockfd;
 }
 
-void Bind(int fd, char* addr, int port){
+void Bind(int fd, uint32_t addr, uint16_t port){
     struct sockaddr_in sin;
     sin.sin_family = AF_INET;
     sin.sin_port = htons(port);
-    sin.sin_addr.s_addr = inet_addr (addr);
+    sin.sin_addr.s_addr = (addr);
 
     int sl = sizeof(struct sockaddr_in);
     int ec = bind(fd, (struct sockaddr*)&sin, sl);
@@ -138,9 +138,12 @@ void Bind(int fd, char* addr, int port){
     }
 }
 
+void Bind_str(int fd, char* addr, uint16_t port){
+    return Bind(fd, inet_addr(addr), port);
+}
 
 #define RAW_BIND (1 << 0)
-IPSocket* getRawSocket(char* addr, int port, int proto, int flags){
+IPSocket* getRawSocket(uint32_t addr, uint16_t port, uint8_t proto, int flags){
    IPSocket* ipsock = malloc(sizeof(IPSocket));
    if (ipsock == (IPSocket*)0){
         perror("malloc");
@@ -151,12 +154,15 @@ IPSocket* getRawSocket(char* addr, int port, int proto, int flags){
     ipsock->proto = proto;
     ipsock->addr.sin_family = AF_INET;
     ipsock->addr.sin_port = port;
-    ipsock->addr.sin_addr.s_addr = inet_addr(addr);
+    ipsock->addr.sin_addr.s_addr = addr;
     ipsock->addr_size = sizeof(struct sockaddr_in);
     if (RAW_BIND & flags){
         Bind(ipsock->sockfd, addr, port);
     }
     return ipsock;
+}
+IPSocket* getRawSocket_str(char* addr, uint16_t port, uint8_t proto, int flags){
+    return getRawSocket(inet_addr(addr),port, proto, flags);
 }
 void freeRawSocket(IPSocket* ipsock){
     if (ipsock != (IPSocket*)0){

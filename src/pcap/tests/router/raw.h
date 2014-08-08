@@ -1,16 +1,11 @@
-#include <sys/stat.h>
-#include <sys/ioctl.h>
+#ifndef _RAW_H_
+#define _RAW_H_
+
 #include <string.h>
-#include <fcntl.h>
 #include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <sys/types.h>
-#include <sys/socket.h>
-#include <netdb.h>
 #include <arpa/inet.h>
-#include <linux/if.h>
-#include <linux/if_tun.h>
 
 // Structure for a raw IP level socket
 typedef struct _IPSocket{
@@ -53,14 +48,20 @@ void addIPSocket(IPSocketList* list, IPSocket* ipsock);
 // Remove a node from a linked list.  Matches the index.
 void removeIPSocket(IPSocketList* listheader, IPSocketNode** node);
 
+// Bind a file descriptor to a nbo address and port.
+void Bind_str(int fd, char* addr, uint16_t port);
+
 // Bind a file descriptor to a address and port.
-void Bind(int fd, char* addr, int port);
+void Bind(int fd, uint32_t addr, uint16_t port);
 
 // Get a new IP raw socket that uses given addr/port/proto
 // to send to and receive from.  pass in RAW_BIND flag
 // to bind to the given address as well.
 #define RAW_BIND (1 << 0)
-IPSocket* getRawSocket(char* addr, int port, int proto, int flags);
+IPSocket* getRawSocket(uint32_t addr, uint16_t port, uint8_t proto, int flags);
+
+// use string instead of nbo ip addr
+IPSocket* getRawSocket_str(char* addr, uint16_t port, uint8_t proto, int flags);
 
 // Free a raw socket.
 void freeRawSocket(IPSocket* ipsock);
@@ -71,4 +72,4 @@ int Recvfrom(IPSocket* ipsock, char* buf, int lim);
 // Send data into a raw socket.
 int Sendto(IPSocket* ipsock, char* buf, int lim);
 
-
+#endif
