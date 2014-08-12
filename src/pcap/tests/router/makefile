@@ -1,4 +1,5 @@
 
 
 all:
-	clang main.c lib/* -Ipcap -Ilibnet
+	clang *.c lib/* -Ipcap -Ilibnet -o router
+

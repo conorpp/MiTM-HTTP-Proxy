@@ -53,12 +53,13 @@ int main(int argc, char* argv[]){
     IPSocketNode* p;
     char tun_name[1000] = "tun0";
     int tunfd = tun_alloc(tun_name, IFF_TUN|IFF_NO_PI);
-    addIPSocket(socks, raw);
+    // addIPSocket(socks, raw);
     char buf[10000];
     ip_h* ipHeader;
     while (1) {
         printf("selecting\n");
         SelectIPSocket(socks);
+        printf("selected\n");
         
         // TODO ifconfig up tun0 and ping it to confirm protocol are printing
         if (SelectFd(tunfd)){

@@ -43,6 +43,10 @@ typedef struct{
     // optional header
 } ip_h;
 
+#define IP_ICMP 1
+#define IP_UDP 17
+#define IP_TCP 6
+
 typedef struct{
     uint16_t src_port;
     uint16_t dst_port;
