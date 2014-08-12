@@ -12,6 +12,8 @@ typedef struct _IPSocket{
     int sockfd;
     int proto;
     struct sockaddr_in addr;
+        //.sin_addr.s_addr
+        //.sin_port
     int addr_size;
 }IPSocket;
 
@@ -22,6 +24,7 @@ typedef struct _IPSocketNode{
     int i;
     int data_ready;
     int data_misses;
+    uint64_t hash;
 } IPSocketNode;
 
 // Linked list header for IP raw sockets
@@ -47,6 +50,11 @@ void addIPSocket(IPSocketList* list, IPSocket* ipsock);
 
 // Remove a node from a linked list.  Matches the index.
 void removeIPSocket(IPSocketList* listheader, IPSocketNode** node);
+
+
+
+IPSocket* addUniqueIPSocket(IPSocketList* listheader, uint32_t addr, uint16_t port, uint8_t proto, int flags);
+
 
 // Bind a file descriptor to a nbo address and port.
 void Bind_str(int fd, char* addr, uint16_t port);

@@ -98,26 +98,51 @@ void freeIPSocketList(IPSocketList** list){
     *list = NULL;
 }
 
+uint64_t calcIPHash(uint32_t ip, uint32_t proto){
+    uint64_t hash = 0;
+    hash |= ip;
+    hash |= (((uint64_t)proto) << 32);
+    return ~hash;
+}
+
+IPSocket* addUniqueIPSocket(IPSocketList* listheader, uint32_t addr, uint16_t port, uint8_t proto, int flags){
+    IPSocketNode* p = listheader->list;
+    uint64_t hash = calcIPHash(addr, proto);
+    while(p != NULL){
+        if (p->hash == hash){
+            printf("Connection already exists!\n");
+            return p->ipsock;
+        }
+        p = p->next;
+    }
+    printf("Connection not found.  Adding it!\n");
+    IPSocket* s = getRawSocket(addr, port, proto, flags);
+    addIPSocket(listheader, s);
+    return s;
+}
+
 void addIPSocket(IPSocketList* listheader, IPSocket* ipsock){
     
     if (listheader->list == (IPSocketNode*)0)
         listheader->list = getIPSocketNode();
     
     IPSocketNode* list = listheader->list;
-    
+    IPSocketNode* added = NULL;
+
     if (list->ipsock == (IPSocket*)0){
-        list->ipsock = ipsock;
-        list->i = listheader->length;
+        added = list;
         goto done;
     }
     while(list->next != (IPSocketNode*) 0)
         list = list->next;
 
     list->next = getIPSocketNode();
-    list->next->ipsock = ipsock;
-    list->next->i = listheader->length;
+    added = list->next;
 
     done:
+    added->ipsock = ipsock;
+    added->i = listheader->length;
+    added->hash = calcIPHash(ipsock->addr.sin_addr.s_addr, ipsock->proto);
     listheader->length++;
     if (ipsock->sockfd > listheader->maxfd)
         listheader->maxfd = ipsock->sockfd;

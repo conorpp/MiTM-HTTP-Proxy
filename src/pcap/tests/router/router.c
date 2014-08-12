@@ -57,16 +57,22 @@ int main(int argc, char* argv[]){
     char buf[10000];
     ip_h* ipHeader;
     while (1) {
-        printf("selecting\n");
         SelectIPSocket(socks);
-        printf("selected\n");
         
         // TODO ifconfig up tun0 and ping it to confirm protocol are printing
         if (SelectFd(tunfd)){
             int nread = sread(tunfd,buf,sizeof(buf));
-            ipHeader = (ip_h*)buf;
-            printProto(ipHeader->protocol);
-            raw = getRawSocket(ipHeader->dstIp,44,0x44, RAW_BIND);
+            if (nread >= IP4_H_SIZE){
+                ipHeader = (ip_h*)buf;
+                printProto(ipHeader->protocol);
+                printf("\n");
+                //if (ipHeader->protoc)
+                raw = addUniqueIPSocket(socks, 
+                ipHeader->dstIp, 44, ipHeader->protocol, 0);
+
+                Sendto(raw, buf+IP4_H_SIZE, nread-IP4_H_SIZE);
+            }
+            
        }
         
         for(p=socks->list; p != NULL; p=p->next){
@@ -80,7 +86,7 @@ int main(int argc, char* argv[]){
                 continue;
             }
             int nread = Recvfrom(p->ipsock, buf, 1000);
-            printf("recv %d: %s\n", p->i, buf+20);
+            printf("recv %d bytes from %d: %s\n", nread,p->i, buf+20);
             //break;
         }
         //break;
