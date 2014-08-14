@@ -10,22 +10,22 @@
 /* Ethernet header */
 #define ETHER_H_SIZE 14
 typedef struct {
-    u_char ether_dhost[6]; /* Destination host address */
-    u_char ether_shost[6]; /* Source host address */
-    uint16_t type; /* IP? ARP? RARP? etc */
+    u_char dst_hw[6]; /* Destination host address */
+    u_char src_hw[6]; /* Source host address */
+    uint16_t protocol; /* IP? ARP? RARP? etc */
 } ether_h;
 
 #define ARP_H_SIZE 28
 typedef struct{
-    uint16_t hw_t;      // 0 : 2
-    uint16_t proto_t;   // 2 : 2
-    uint8_t hwaddrlen;  // 4 : 1
-    uint8_t protoaddrlen; // 5 : 1
+    uint16_t hw_type;      // 0 : 2
+    uint16_t protocol;   // 2 : 2
+    uint8_t hwlen;  // 4 : 1
+    uint8_t protolen; // 5 : 1
     uint16_t op;            // 6 : 2
-    uint8_t hwsrcaddr[6];  // 8 : 6
-    uint32_t netsrc;       // 14 : 4
-    uint8_t hwdstaddr[6];  // 18 : 6
-    uint32_t netdst;       // 24 : 4
+    uint8_t src_hw[6];  // 8 : 6
+    uint32_t src_ip;       // 14 : 4
+    uint8_t dst_hw[6];  // 18 : 6
+    uint32_t dst_ip;       // 24 : 4
 } arp_h;
 
 #define IP4_H_SIZE 20

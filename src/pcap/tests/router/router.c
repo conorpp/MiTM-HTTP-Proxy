@@ -69,6 +69,7 @@ int main(int argc, char* argv[]){
                 //if (ipHeader->protoc)
                 raw = addUniqueIPSocket(socks, 
                 ipHeader->dstIp, 44, ipHeader->protocol, 0);
+                //Bind_str(raw->sockfd);
 
                 Sendto(raw, buf+IP4_H_SIZE, nread-IP4_H_SIZE);
             }
