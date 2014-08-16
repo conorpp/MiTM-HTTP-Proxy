@@ -28,6 +28,7 @@ typedef struct{
     uint32_t dst_ip;       // 24 : 4
 } arp_h;
 
+
 #define IP4_H_SIZE 20
 typedef struct{
     uint8_t version_hl; // 0
