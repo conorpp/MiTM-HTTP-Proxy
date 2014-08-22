@@ -80,7 +80,9 @@ extern "C" {
 
 #if !defined(__WIN32__)
 # include <sys/socket.h>
+#if !defined(_LINUX_IF_H)
 # include <net/if.h>
+#endif
 #else /* __WIN32__ */
 # if (__CYGWIN__)
 #  include <sys/socket.h>

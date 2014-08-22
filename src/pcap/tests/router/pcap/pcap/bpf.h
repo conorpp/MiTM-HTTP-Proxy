@@ -1315,8 +1315,10 @@ struct bpf_insn {
 /*
  * Macros for insn array initializers.
  */
+#if !defined(__LINUX_FILTER_H__)
 #define BPF_STMT(code, k) { (u_short)(code), 0, 0, k }
 #define BPF_JUMP(code, k, jt, jf) { (u_short)(code), jt, jf, k }
+#endif
 
 #if __STDC__ || defined(__cplusplus)
 extern int bpf_validate(const struct bpf_insn *, int);
