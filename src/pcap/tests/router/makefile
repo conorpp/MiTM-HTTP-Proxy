@@ -7,7 +7,7 @@ INCLUDE=-Ipcap -Ilibnet -I../../../utils
 
 
 arp:
-	clang sendarp.c arp.c pcap.c lib/* $(INCLUDE) -ldnet
+	clang sendarp.c pcap.c lib/* $(INCLUDE) -ldnet
 
 all:
 	clang *.c lib/* $(INCLUDE) -o router
