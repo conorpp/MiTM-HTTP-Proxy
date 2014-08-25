@@ -1,6 +1,22 @@
+#include <unistd.h>
 #include "pcap.h"
 #include "packetStructures.h"
 #include "utils.h"
+
+
+void initHost(char* device){
+    if (getuid() != 0){
+        printf("Must be root.\n");    
+        exit(1);
+    }
+    getHostHw(&Settings.hostHw, device);
+    getHostIp(&Settings.hostIp, device);
+    getDefaultGatewayHw(&Settings.defaultHw);
+    getDefaultGatewayIp(&Settings.defaultIp);
+
+    Settings.device = device;
+}
+
 
 pcap_t* setPromiscuous(char* device, char* filter){
     char errbuf[PCAP_ERRBUF_SIZE];
@@ -37,15 +53,22 @@ pcap_t* setPromiscuous(char* device, char* filter){
 
 void getDefaultGatewayIp(struct addr* ip){
     route_t* router = route_open();
-
+    if (router == NULL){
+        die("route_open failed");    
+    }
     struct route_entry entry;
 
-    addr_pton("8.8.8.8", &entry.route_dst);
+    if ( addr_pton("8.8.8.8", &entry.route_dst) != 0){
+        die("addr_pton: bad ip address");
+    }
 
-    route_get(router, &entry);
+    if ( route_get(router, &entry) != 0){
+        die("route_get failed");
+    }
 
     memmove(ip, &entry.route_gw, sizeof(struct addr));
     printf("gw ip is %s\n", addr_ntoa(&entry.route_gw));
+    printf("gw ip is %x\n", ip->addr_ip);
     route_close(router);
 
 }

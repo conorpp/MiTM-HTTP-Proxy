@@ -1,4 +1,5 @@
 #include "raw.h"
+#include "utils.h"
 
 void SelectIPSocket(IPSocketList* list){
     struct timeval timeout = {0, 200 * 1000};
@@ -167,7 +168,6 @@ void Bind_str(int fd, char* addr, uint16_t port){
     return Bind(fd, inet_addr(addr), port);
 }
 
-#define RAW_BIND (1 << 0)
 IPSocket* getRawSocket(uint32_t addr, uint16_t port, uint8_t proto, int flags){
    IPSocket* ipsock = malloc(sizeof(IPSocket));
    if (ipsock == (IPSocket*)0){
@@ -181,8 +181,25 @@ IPSocket* getRawSocket(uint32_t addr, uint16_t port, uint8_t proto, int flags){
     ipsock->addr.sin_port = port;
     ipsock->addr.sin_addr.s_addr = addr;
     ipsock->addr_size = sizeof(struct sockaddr_in);
+
+    printf(" created socket with addr %s\n", inet_ntoa(ipsock->addr.sin_addr));
+    
     if (RAW_BIND & flags){
         Bind(ipsock->sockfd, addr, port);
+    }
+    // Prevent kernal from adding IP header.
+    if (RAW_ETHER & flags){
+        int one = 1;
+        const int* val = &one;
+        if(setsockopt(ipsock->sockfd, 
+                    IPPROTO_IP,
+                    IP_HDRINCL,
+                    val,
+                    sizeof(one)) < 0)
+        {
+            die("setsockopt()");
+        }
+
     }
     return ipsock;
 }
@@ -200,7 +217,7 @@ void freeRawSocket(IPSocket* ipsock){
     }
 }
 
-int Recvfrom(IPSocket* ipsock, char* buf, int lim){
+int Recvfrom(IPSocket* ipsock, void* buf, int lim){
     return recvfrom(ipsock->sockfd,
                     buf, lim, 0,
                     (struct sockaddr*)&ipsock->addr,
@@ -208,7 +225,8 @@ int Recvfrom(IPSocket* ipsock, char* buf, int lim){
 }
 
 
-int Sendto(IPSocket* ipsock, char* buf, int lim){
+int Sendto(IPSocket* ipsock, void* buf, int lim){
+    printf("sending to %s\n", inet_ntoa(ipsock->addr.sin_addr));
     return sendto(ipsock->sockfd, buf, lim, 0, 
             (struct sockaddr*)&ipsock->addr, ipsock->addr_size);
     

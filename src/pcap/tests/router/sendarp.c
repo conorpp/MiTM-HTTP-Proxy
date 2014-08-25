@@ -4,6 +4,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include "pcap.h"
+#include "raw.h"
 
 void arpPoison(struct addr* targetIp, struct addr* recordIp, struct addr* recordHw){
     pcap_t* cap = setPromiscuous(Settings.device,"arp");
@@ -25,21 +26,6 @@ void arpPoison(struct addr* targetIp, struct addr* recordIp, struct addr* record
 
     pcap_inject(cap, arp, ETHER_H_SIZE + ARP_H_SIZE);
 }
-
-void initHost(char* device){
-    if (getuid() != 0){
-        printf("Must be root.\n");    
-        exit(1);
-    }
-    getHostHw(&Settings.hostHw, device);
-    getHostIp(&Settings.hostIp, device);
-    getDefaultGatewayHw(&Settings.defaultHw);
-    getDefaultGatewayIp(&Settings.defaultIp);
-
-    Settings.device = device;
-}
-
-
 int main(int argc, char* argv[]){
    if (argc < 3){
         printf("usage: ./%s <interface> <target ip>\n", argv[0]);
@@ -58,7 +44,13 @@ int main(int argc, char* argv[]){
     arpPoison(  &Settings.defaultIp,
                 &targetIp,
                 &Settings.hostHw);
-
+/*    IPSocket* raw = getRawSocket(targetIp.addr_ip, 0, IP_ICMP, RAW_BIND);
+    int r;
+    char buffer[10000];
+    for(;;){
+        r = Recvfrom(raw, buffer, sizeof(buffer));
+        printf("recv'd %d ICMP bytes from %s\n",r, addr_ntoa(&targetIp));
+    }*/
     return 0;
 }
 

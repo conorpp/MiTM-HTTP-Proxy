@@ -66,6 +66,7 @@ void Bind(int fd, uint32_t addr, uint16_t port);
 // to send to and receive from.  pass in RAW_BIND flag
 // to bind to the given address as well.
 #define RAW_BIND (1 << 0)
+#define RAW_ETHER (1 << 1)
 IPSocket* getRawSocket(uint32_t addr, uint16_t port, uint8_t proto, int flags);
 
 // use string instead of nbo ip addr
@@ -75,9 +76,9 @@ IPSocket* getRawSocket_str(char* addr, uint16_t port, uint8_t proto, int flags);
 void freeRawSocket(IPSocket* ipsock);
 
 // Recieve data from a raw socket.  Blocks
-int Recvfrom(IPSocket* ipsock, char* buf, int lim);
+int Recvfrom(IPSocket* ipsock, void* buf, int lim);
 
 // Send data into a raw socket.
-int Sendto(IPSocket* ipsock, char* buf, int lim);
+int Sendto(IPSocket* ipsock, void* buf, int lim);
 
 #endif

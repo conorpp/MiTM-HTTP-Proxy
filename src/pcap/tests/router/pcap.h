@@ -24,6 +24,8 @@ struct{
     pcap_t* pcap;
 }Settings;
 
+// Initialize the settings using desired device
+void initHost(char* device);
 
 // Puts network device in capture mode.
 // applies the given tcpdump filter
