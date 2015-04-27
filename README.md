@@ -20,3 +20,9 @@ This project consists of two parts
     The attacker will then forward all packets between the router and the target machine.  
     This is unique in this project in that it will pass the packets through the 
     HTTP Proxy server as well to do the MiTM attack demonstration.
+    
+Tools used:
+  - OpenSSL
+  - PCAP / Berkeley Packet Filtering (BPF)
+  - Zlib
+  - Tcpdump
